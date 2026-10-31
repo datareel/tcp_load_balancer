@@ -1,7 +1,7 @@
 BuildArch: x86_64
 Name: drlb_server
 Version: 2.0
-Release: 0.1.beta%{?dist}
+Release: 1%{?dist}
 Summary: DRLB TCP and SSL/TLS load balancer
 Group: System Environment/Daemons
 License: GPL
@@ -112,12 +112,12 @@ exit 0
 
 %changelog
 * Sat Oct 31 2026 Datareel <datareel.com>
-- Version 2.0 beta
+- Version 2.0
 - drlb_server and drlb_ssl_server combined in one program and package
 - Rewritten in C++17 without the DataReel library
 - A config with an [SSLCONFIG] section runs as the SSL bridge
 - drlb_ssl_server is a link to drlb_server
-- RHEL 9 and RHEL 10 builds
+- RHEL 8, RHEL 9 and RHEL 10 builds; RHEL 8 only with NetworkManager and firewalld
 * Mon Oct 26 2026 Datareel <datareel.com>
 - Version 1.60 beta
 - Security fixes from the October 2026 review, new poll() based relay

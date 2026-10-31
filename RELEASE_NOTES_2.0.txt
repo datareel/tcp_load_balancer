@@ -1,7 +1,5 @@
-DRLB 2.0 beta release notes
+DRLB 2.0 release notes
 DRLB TCP load balancer, 10/31/2026
-
-This is a beta release. Test it before production use.
 
 Overview
 --------
@@ -14,7 +12,8 @@ Overview
   TCP load balancer, like drlb_server 1.60. Config files are unchanged.
 * drlb_ssl_server is installed as a link to drlb_server, and the
   drlb_ssl_server service is unchanged.
-* One RPM for RHEL 9 and RHEL 10. It replaces both 1.60 RPMs and keeps
+* RPMs for RHEL 8, RHEL 9 and RHEL 10 (RHEL 8 only with NetworkManager
+  and firewalld, as in 1.60). Each replaces both 1.60 RPMs and keeps
   drlb_ssl_server.service enabled and running if it was.
 
 Unchanged from 1.60

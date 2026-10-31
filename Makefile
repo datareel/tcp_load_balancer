@@ -13,6 +13,12 @@ CXXFLAGS += -std=c++17 -Wall -Wextra -pthread
 LDFLAGS  ?=
 LDLIBS   += -lssl -lcrypto -pthread
 
+# GCC 8 (RHEL 8) keeps std::filesystem in a separate library
+GCC_MAJOR := $(shell $(CXX) -dumpversion 2>/dev/null | cut -d. -f1)
+ifeq ($(GCC_MAJOR),8)
+LDLIBS   += -lstdc++fs
+endif
+
 PREFIX   ?= /usr
 SBINDIR  ?= $(PREFIX)/sbin
 DESTDIR  ?=

@@ -2,7 +2,7 @@
 # Build the drlb_server RPM on the RHEL version it is for, or in a
 # matching UBI container.
 #
-# Usage: ./make_rpm_package.sh rhel9|rhel10 [build_dir]
+# Usage: ./make_rpm_package.sh rhel8|rhel9|rhel10 [build_dir]
 # Needs: gcc-c++ make rpm-build openssl-devel
 
 set -e
@@ -10,9 +10,10 @@ umask 0022
 
 OS=${1,,}
 case "${OS}" in
+    rhel8) DIST=".el8" ;;
     rhel9) DIST=".el9" ;;
     rhel10) DIST=".el10" ;;
-    *) echo "Usage: ${0} rhel9|rhel10 [build_dir]"; exit 1 ;;
+    *) echo "Usage: ${0} rhel8|rhel9|rhel10 [build_dir]"; exit 1 ;;
 esac
 
 HERE=$(cd "$(dirname "$0")" && pwd)

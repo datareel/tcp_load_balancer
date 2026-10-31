@@ -16,7 +16,8 @@ All 1.60-beta behavior is kept: the same config file format and
 settings, the four schemes (round robin, weighted, distributed,
 assigned), dead node handling, throttling, X-Forwarded-For rewriting,
 log and stats files with rotation, the drlb user, systemd sandboxing,
-TLS 1.2+ defaults and RHEL 9/10 support.
+TLS 1.2+ defaults and RHEL 8 (NetworkManager and firewalld only), 9
+and 10 support.
 
 ## When TLS is used
 
@@ -103,7 +104,7 @@ default. Two small differences, both only visible with malformed files:
 
 ## Packaging
 
-One RPM, `drlb_server` 2.0 (release `0.1.beta`), for RHEL 9 and RHEL 10:
+One RPM, `drlb_server` 2.0 (release 1), for RHEL 8, RHEL 9 and RHEL 10:
 
 - `/usr/sbin/drlb_server` and the `/usr/sbin/drlb_ssl_server` link
 - `drlb_server.service`, `drlb_server@.service` and

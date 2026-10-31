@@ -1,4 +1,4 @@
-# DRLB TCP load balancer 2.0 (beta)
+# DRLB TCP load balancer 2.0
 
 `drlb_server` is a TCP load balancer for Linux. It accepts connections on
 one port and relays each one to a backend node chosen by round robin,
@@ -24,12 +24,14 @@ is organized.
   `drlb_ssl_server`), sysconfig files, `drlb` user and sandboxing are the
   same. The 2.0 RPM replaces both 1.60 RPMs and keeps
   `drlb_ssl_server.service` enabled if it was.
+- RHEL 8 is supported only with NetworkManager and firewalld, as in
+  1.60.
 - See [RELEASE_NOTES_2.0.txt](RELEASE_NOTES_2.0.txt) for the small
   behavior changes.
 
 ## Building
 
-RHEL 9 or RHEL 10:
+RHEL 8, RHEL 9 or RHEL 10:
 
 ```
 sudo dnf -y install gcc-c++ make openssl-devel
@@ -46,7 +48,7 @@ Build the RPM on the RHEL version it is for (also needs `rpm-build`):
 
 ```
 cd rpm
-./make_rpm_package.sh rhel10      # or rhel9
+./make_rpm_package.sh rhel10      # or rhel9, rhel8
 sudo dnf -y install ~/rpmbuild/RPMS/x86_64/drlb_server-2.0-*.el10.x86_64.rpm
 ```
 

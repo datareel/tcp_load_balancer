@@ -6,26 +6,32 @@ weight, load percent or client address rules. A config file with an
 `[SSLCONFIG]` section also terminates SSL/TLS on the frontend (the DRLB
 SSL bridge), with optional TLS to the backend nodes.
 
-Version 2.0 combines the 1.60-beta **load-balancer** (`drlb_server`) and
-**ssl-bridge** (`drlb_ssl_server`) packages in one program. It is written
-in C++17 with only the standard library, POSIX and OpenSSL; the DataReel
-library is no longer used. The 1.60 sources and history are kept in the
-`legacy_drlb` repository. [DESIGN.md](DESIGN.md) describes how the code
-is organized.
+Version 2.0 combines the 1.60/1.61 **load-balancer** (`drlb_server`)
+and **ssl-bridge** (`drlb_ssl_server`) packages in one program. It is
+written in C++17 with only the standard library, POSIX and OpenSSL; the
+DataReel library is no longer used. The 1.61 releases of both packages,
+and LDM-load-balancer 1.65 (which 2.0 does not replace), are kept in the
+`legacy_drlb` repository.
 
-## Upgrading from 1.60
+The full documentation is the
+[user guide](docs/USER_GUIDE.md): install, services, every config
+setting, the load balancing schemes, TLS, logging, stats, tuning and
+testing. [DESIGN.md](DESIGN.md) describes how the code is organized.
 
-- Config files are unchanged. 1.60 `drlb_server` configs run as plain
+Supported platforms: RHEL 10, RHEL 9, and RHEL 8 with NetworkManager
+and firewalld (and rebuilds such as Rocky Linux and AlmaLinux).
+
+## Upgrading from 1.60 or 1.61
+
+- Config files are unchanged. Old `drlb_server` configs run as plain
   TCP load balancers, and `ssl_bridge.cfg` (it has an `[SSLCONFIG]`
   section) runs as the SSL bridge.
 - `drlb_ssl_server` is now a link to `drlb_server`. Under that name the
   config must have an `[SSLCONFIG]` section.
 - The services (`drlb_server`, `drlb_server@<config>` and
   `drlb_ssl_server`), sysconfig files, `drlb` user and sandboxing are the
-  same. The 2.0 RPM replaces both 1.60 RPMs and keeps
-  `drlb_ssl_server.service` enabled if it was.
-- RHEL 8 is supported only with NetworkManager and firewalld, as in
-  1.60.
+  same. The 2.0 RPM replaces both old RPMs and keeps
+  `drlb_ssl_server.service` enabled and running if it was.
 - See [RELEASE_NOTES_2.0.txt](RELEASE_NOTES_2.0.txt) for the small
   behavior changes.
 
@@ -44,7 +50,8 @@ CMake also works: `cmake -S . -B build-cmake && cmake --build build-cmake`.
 
 ## RPM
 
-Build the RPM on the RHEL version it is for (also needs `rpm-build`):
+Build the RPM on the RHEL version it is for (also needs `rpm-build`).
+The RPM is `drlb_server-2.0-1.el8`, `.el9` or `.el10`:
 
 ```
 cd rpm
@@ -65,11 +72,9 @@ If the config file named with `--config-file` does not exist, a default
 one is written and the program exits. `etc/example_config.cfg` and
 `etc/ssl_bridge.cfg` show every setting.
 
-The settings are documented in
-[docs/README_load_balancer_1.60.txt](docs/README_load_balancer_1.60.txt)
-(load balancing, logging, stats, throttling, HTTP forwarding, limits,
-tuning) and [docs/README_ssl_bridge_1.60.txt](docs/README_ssl_bridge_1.60.txt)
-(certificates and TLS settings). They apply to 2.0 unchanged.
+Every setting is described in the
+[settings reference](docs/USER_GUIDE.md#settings-reference) of the user
+guide.
 
 ## TLS settings in brief
 
@@ -91,14 +96,14 @@ Ciphers follow the system crypto policy unless `ssl_cipher_list` or
 ## Tests
 
 ```
-make test
+make test                    # RHEL 8: make test PYTHON=python3.11
 ```
 
 runs `tests/drlb_tests.py` and `tests/ssl_bridge_tests.py` (the 1.60
 regression suites) and `tests/compat_tests.py` against `./drlb_server`.
-They need Python 3 and the `openssl` command and use local ports
-18000-18299. `tests/load/run_load_tests.py` runs the load and stress
-tests.
+They need Python 3.7 or later and the `openssl` command and use local
+ports 18000-18299. `tests/load/run_load_tests.py` runs the load and
+stress tests (needs `ab` and matplotlib).
 
 ## License
 

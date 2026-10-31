@@ -3,8 +3,10 @@ DRLB TCP load balancer, 10/31/2026
 
 Overview
 --------
-* One program, drlb_server, replaces the 1.60 load-balancer
-  (drlb_server) and ssl-bridge (drlb_ssl_server) packages.
+* One program, drlb_server, replaces the 1.60/1.61 load-balancer
+  (drlb_server) and ssl-bridge (drlb_ssl_server) packages. The 1.61
+  releases and LDM-load-balancer 1.65 (not replaced by 2.0) are kept
+  in the legacy_drlb repository.
 * Rewritten in C++17 with the standard library, POSIX sockets and
   OpenSSL. The DataReel library is no longer used.
 * A config file with an [SSLCONFIG] section terminates SSL/TLS on the
@@ -13,7 +15,7 @@ Overview
 * drlb_ssl_server is installed as a link to drlb_server, and the
   drlb_ssl_server service is unchanged.
 * RPMs for RHEL 8, RHEL 9 and RHEL 10 (RHEL 8 only with NetworkManager
-  and firewalld, as in 1.60). Each replaces both 1.60 RPMs and keeps
+  and firewalld, as in 1.60). Each replaces both 1.60/1.61 RPMs and keeps
   drlb_ssl_server.service enabled and running if it was.
 
 Unchanged from 1.60
@@ -61,7 +63,18 @@ Behavior changes
   example "ECONNREFUSED: Connection refused".
 * Message typos fixed ("Staring", "Timout", "decresed").
 
+Documentation
+-------------
+* docs/USER_GUIDE.md, installed as /usr/share/doc/drlb/USER_GUIDE.md,
+  replaces the 1.60 README.txt (load-balancer) and README_ssl.txt
+  (ssl-bridge). It documents every setting with its 2.0 default.
+* The 1.60 README said LB_NONE uses round robin for clients with no
+  assigned rule. 1.60 and 2.0 both close those connections; the guide
+  now says so.
+
 Testing
 -------
 make test runs tests/drlb_tests.py and tests/ssl_bridge_tests.py (the
-1.60 regression suites) and tests/compat_tests.py (2.0 checks).
+1.60 regression suites) and tests/compat_tests.py (2.0 checks). The
+tests need Python 3.7 or later; on RHEL 8 run make test
+PYTHON=python3.11.

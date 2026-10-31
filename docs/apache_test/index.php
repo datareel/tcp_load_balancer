@@ -7,7 +7,7 @@
 ><h1><?php echo php_uname('n'); ?> Test Page</h1>
 </center>
 <hr>
-<pre>Response from <?php echo php_uname('n'); ?> HTTP server server listening on port 80
+<pre>Response from <?php echo php_uname('n'); ?> HTTP server listening on port 80
 </pre>
 <hr>
 <center>End of document</center>

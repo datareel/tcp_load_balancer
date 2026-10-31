@@ -7,8 +7,8 @@
 </center>
 <hr />
 <pre>
-Response from VM1 HTTP server
-Server listening on port80
+Response from <?php echo php_uname('n'); ?> HTTP server
+Server listening on port 80
 Persistent loop test
 <?php
 ob_implicit_flush(1);
@@ -18,7 +18,7 @@ $HOSTNAME = php_uname('n');
 
 while(1) {
    $i++;
-   echo "${HOSTNAME} in persistent loop, rep number ${i}, sleeping for 1 sec\n";
+   echo "{$HOSTNAME} in persistent loop, rep number {$i}, sleeping for 1 sec\n";
    if(sleep(1) != 0) {
     echo "Sleep failed, exiting\n";
     break;

@@ -2,7 +2,7 @@
 
 ## Goal
 
-One C++17 program, `drlb_server`, that replaces both 1.60-beta packages:
+One C++17 program, `drlb_server`, that replaces both 1.60/1.61 packages:
 
 - **load-balancer** (`drlb_server`): plain TCP load balancing.
 - **ssl-bridge** (`drlb_ssl_server`): the same load balancer with TLS
@@ -10,9 +10,9 @@ One C++17 program, `drlb_server`, that replaces both 1.60-beta packages:
 
 It is built only on the C++ standard library, POSIX and OpenSSL. No
 DataReel library code is used or copied. LDM-load-balancer is not part
-of this project.
+of this project; it stays in the `legacy_drlb` repository.
 
-All 1.60-beta behavior is kept: the same config file format and
+All 1.60/1.61 behavior is kept: the same config file format and
 settings, the four schemes (round robin, weighted, distributed,
 assigned), dead node handling, throttling, X-Forwarded-For rewriting,
 log and stats files with rotation, the drlb user, systemd sandboxing,
@@ -112,8 +112,17 @@ One RPM, `drlb_server` 2.0 (release 1), for RHEL 8, RHEL 9 and RHEL 10:
 - `/etc/sysconfig/drlb_server`, `/etc/sysconfig/drlb_ssl_server`,
   `/etc/drlb/active_configs.list`, the example configs and
   `/etc/drlb/ssl_bridge.cfg`
+- `/usr/share/doc/drlb/`: `USER_GUIDE.md`, `README.md`, the release
+  notes and `example_config.cfg`
 - `Obsoletes: drlb_ssl_server < 2.0` and `Provides: drlb_ssl_server`, so
   an upgrade replaces both old packages
+
+## Documentation
+
+[docs/USER_GUIDE.md](docs/USER_GUIDE.md) is the user documentation. It
+replaces the 1.60 load-balancer and ssl-bridge READMEs and describes
+2.0 behavior, so it follows the source: when a setting, default or
+check changes in `src/config.cpp`, update its settings reference.
 
 ## Build
 

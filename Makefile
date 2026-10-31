@@ -2,7 +2,7 @@
 #
 # make            build drlb_server
 # make asan       build drlb_server_asan with AddressSanitizer for testing
-# make test       run the regression tests
+# make test       run the regression tests (PYTHON=python3.11 on RHEL 8)
 # make install    install into DESTDIR (default /), used by the RPM build
 #
 # OpenSSL headers from openssl-devel are required.
@@ -19,6 +19,7 @@ ifeq ($(GCC_MAJOR),8)
 LDLIBS   += -lstdc++fs
 endif
 
+PYTHON   ?= python3
 PREFIX   ?= /usr
 SBINDIR  ?= $(PREFIX)/sbin
 DESTDIR  ?=
@@ -47,9 +48,9 @@ build build/asan:
 	mkdir -p $@
 
 test: drlb_server
-	python3 tests/drlb_tests.py $(CURDIR)/drlb_server
-	python3 tests/ssl_bridge_tests.py $(CURDIR)/drlb_server
-	python3 tests/compat_tests.py $(CURDIR)/drlb_server
+	$(PYTHON) tests/drlb_tests.py $(CURDIR)/drlb_server
+	$(PYTHON) tests/ssl_bridge_tests.py $(CURDIR)/drlb_server
+	$(PYTHON) tests/compat_tests.py $(CURDIR)/drlb_server
 
 install: drlb_server
 	install -D -m 0755 drlb_server $(DESTDIR)$(SBINDIR)/drlb_server

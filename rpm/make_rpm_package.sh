@@ -43,7 +43,7 @@ install -m 0755 systemd/drlb_platform_check systemd/drlb_server_ctl "${STAGE}/us
 install -m 0644 systemd/drlb_server.service systemd/drlb_server@.service \
     systemd/drlb_ssl_server.service "${STAGE}/usr/lib/systemd/system/"
 install -m 0644 README.md RELEASE_NOTES_2.0.txt COPYING version.txt etc/example_config.cfg \
-    docs/README_load_balancer_1.60.txt docs/README_ssl_bridge_1.60.txt "${STAGE}/usr/share/doc/drlb/"
+    docs/USER_GUIDE.md "${STAGE}/usr/share/doc/drlb/"
 gzip -9 -n -c man/drlb_server.8 > "${STAGE}/usr/share/man/man8/drlb_server.8.gz"
 gzip -9 -n -c man/drlb_ssl_server.8 > "${STAGE}/usr/share/man/man8/drlb_ssl_server.8.gz"
 

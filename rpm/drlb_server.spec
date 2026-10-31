@@ -14,7 +14,7 @@ Requires: bash
 Requires(pre): shadow-utils
 Recommends: NetworkManager
 Recommends: firewalld
-# 2.0 replaces both 1.60 packages
+# 2.0 replaces both 1.60/1.61 packages
 Obsoletes: drlb_ssl_server < 2.0
 Provides: drlb_ssl_server = %{version}-%{release}
 
@@ -44,8 +44,7 @@ tar xf %{drlb_tarball} -C $RPM_BUILD_ROOT
 %config(noreplace) %attr(0644, root, root) "/etc/drlb/ssl_bridge.cfg"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/README.md"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/RELEASE_NOTES_2.0.txt"
-%doc %attr(0644, root, root) "/usr/share/doc/drlb/README_load_balancer_1.60.txt"
-%doc %attr(0644, root, root) "/usr/share/doc/drlb/README_ssl_bridge_1.60.txt"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/USER_GUIDE.md"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/COPYING"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/version.txt"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/example_config.cfg"
@@ -64,11 +63,11 @@ tar xf %{drlb_tarball} -C $RPM_BUILD_ROOT
 getent group drlb >/dev/null || groupadd -r drlb
 getent passwd drlb >/dev/null || useradd -r -g drlb -d /var/log/drlb -s /sbin/nologin -c "DataReel load balancer" drlb
 
-# Removing the obsoleted 1.60 drlb_ssl_server package disables and stops
+# Removing the obsoleted 1.60/1.61 drlb_ssl_server package disables and stops
 # its service. Remember its state so %posttrans can restore it.
 mkdir -p /var/lib/rpm-state/drlb
 rm -f /var/lib/rpm-state/drlb/ssl_enabled /var/lib/rpm-state/drlb/ssl_active
-# Only the 1.60 drlb_ssl_server package installs this file
+# Only the 1.60/1.61 drlb_ssl_server packages install this file
 if [ -f /usr/share/doc/drlb_ssl_bridge/version.txt ]; then
     systemctl is-enabled --quiet drlb_ssl_server.service 2>/dev/null && touch /var/lib/rpm-state/drlb/ssl_enabled
     systemctl is-active --quiet drlb_ssl_server.service 2>/dev/null && touch /var/lib/rpm-state/drlb/ssl_active
@@ -118,6 +117,7 @@ exit 0
 - A config with an [SSLCONFIG] section runs as the SSL bridge
 - drlb_ssl_server is a link to drlb_server
 - RHEL 8, RHEL 9 and RHEL 10 builds; RHEL 8 only with NetworkManager and firewalld
+- docs/USER_GUIDE.md replaces the 1.60 load-balancer and ssl-bridge READMEs
 * Mon Oct 26 2026 Datareel <datareel.com>
 - Version 1.60 beta
 - Security fixes from the October 2026 review, new poll() based relay

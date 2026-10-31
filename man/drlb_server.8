@@ -1,0 +1,102 @@
+.\" DRLB TCP load balancer 2.0 manual page
+.\" Copyright (c) 2016-2026 DataReel Software Development
+.TH drlb_server 8 "31 Oct 2026" "2.0" "DRLB TCP Load Balancer"
+.SH NAME
+drlb_server, drlb_ssl_server \- DRLB TCP and SSL/TLS load balancer
+.SH SYNOPSIS
+.B drlb_server
+.RI --config-file= file
+[OPTIONS...]
+.br
+.B drlb_ssl_server
+.RI --config-file= file
+[OPTIONS...]
+.SH DESCRIPTION
+.B drlb_server
+accepts TCP connections on one port and relays each one to a backend
+node chosen by round robin (LB_RR), weight (LB_WEIGHTED), load percent
+(LB_DISTRIB) or client address rules (LB_ASSIGNED).
+.PP
+When the config file has an
+.B [SSLCONFIG]
+section the server also terminates SSL/TLS on the frontend (TLS 1.2 and
+1.3), and with
+.B ssl_encrypt_backend = 1
+it uses TLS to the backend nodes as well, verifying their certificates.
+.PP
+.B drlb_ssl_server
+is a link to
+.BR drlb_server .
+Under that name the config file must have an [SSLCONFIG] section.
+.SH OPTIONS
+.TP
+.B --help
+Print help message and exit
+.TP
+.B --version
+Print version number and exit
+.TP
+.B --check-config
+Check the config file, including the TLS key and certificates, and exit
+.TP
+.B --debug
+Enable debug mode, default level 1
+.TP
+.BI --debug-level= n
+Set debugging level, 1-5
+.TP
+.B --verbose
+Echo messages to the console
+.TP
+.BI --verbose-level= n
+Set verbose level, 0-5
+.TP
+.BI --config-file= file
+Config file to use. A default file is written if it does not exist.
+.TP
+.BI --log-file= file
+Log to this file, overrides the config file
+.TP
+.BI --log-level= n
+Set logging level, 0-5
+.TP
+.B --log-file-clear
+Clear the log file when the program starts
+.TP
+.B --log-disable
+Disable logging, overrides the config file
+.TP
+.BI --stats-file= file
+Write server stats to this file
+.TP
+.B --stats-disable
+Disable server stats, overrides the config file
+.SH SIGNALS
+.TP
+.BR SIGTERM ", " SIGINT
+Stop accepting connections, let open connections finish, then exit.
+.TP
+.B SIGUSR2
+Enable debug mode or raise the debug level.
+.TP
+.B SIGUSR1
+Lower the debug level.
+.SH FILES
+.TP
+.I /etc/drlb/active_configs.list
+Configs started by drlb_server.service
+.TP
+.I /etc/drlb/ssl_bridge.cfg
+Config used by drlb_ssl_server.service
+.TP
+.I /etc/sysconfig/drlb_server, /etc/sysconfig/drlb_ssl_server
+Service settings
+.TP
+.I /var/log/drlb
+Log and stats files
+.SH SEE ALSO
+/usr/share/doc/drlb/README.md
+.SH BUGS
+https://datareel.com/contact.php
+.SH AUTHOR
+DataReel Software Development

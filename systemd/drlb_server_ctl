@@ -1,0 +1,120 @@
+#!/bin/bash
+# drlb_server_ctl: Start and stop the DRLB server configurations
+#
+# Used by the drlb_server systemd service to run every configuration
+# listed in /etc/drlb/active_configs.list, or the single configuration
+# set with SINGLECONFIG in /etc/sysconfig/drlb_server. To run one
+# configuration as its own service use the drlb_server@ template:
+#
+# systemctl start drlb_server@http_rr_test   (/etc/drlb/http_rr_test.cfg)
+
+LBPROCNAME="drlb_server"
+LBPROC="/usr/sbin/${LBPROCNAME}"
+ACTIVE_CONFIGS="/etc/drlb/active_configs.list"
+SINGLECONFIG=""
+STOP_TIMEOUT=15
+
+# System specific ENV overrides
+if [ -f /etc/sysconfig/drlb_server ]; then . /etc/sysconfig/drlb_server; fi
+if [ -n "${2}" ]; then SINGLECONFIG="${2}"; fi
+
+error_level=0
+
+config_pid() {
+    pgrep -f -x -- "${LBPROC} --config-file=${1}( .*)?"
+}
+
+list_configs() {
+    if [ -n "${SINGLECONFIG}" ]; then
+	echo "${SINGLECONFIG}"
+	return
+    fi
+    if [ ! -f "${ACTIVE_CONFIGS}" ]; then
+	echo "ERROR - Missing active config list: ${ACTIVE_CONFIGS}" >&2
+	error_level=1
+	return
+    fi
+    sed -e 's/#.*//' -e 's/[[:space:]]//g' -e '/^$/d' "${ACTIVE_CONFIGS}"
+}
+
+start_with_config() {
+    CFGFILE="${1}"
+    if [ ! -f "${CFGFILE}" ]; then
+	echo "ERROR - Config file not found: ${CFGFILE}"
+	error_level=1
+	return
+    fi
+    if [ -n "$(config_pid "${CFGFILE}")" ]; then
+	echo "${LBPROCNAME} with ${CFGFILE} config already running"
+	return
+    fi
+    echo "Starting ${LBPROCNAME} with ${CFGFILE} config"
+    ${LBPROC} --config-file="${CFGFILE}" > /dev/null 2>&1 &
+    sleep 1
+    if [ -z "$(config_pid "${CFGFILE}")" ]; then
+	echo "ERROR - ${LBPROCNAME} with ${CFGFILE} config failed to start"
+	error_level=1
+    fi
+}
+
+stop_with_config() {
+    CFGFILE="${1}"
+    pid=$(config_pid "${CFGFILE}")
+    if [ -z "${pid}" ]; then
+	echo "${LBPROCNAME} with ${CFGFILE} not running"
+	return
+    fi
+    echo "Stopping ${LBPROCNAME} with ${CFGFILE} config"
+    kill ${pid}
+    count=0
+    while [ ${count} -lt ${STOP_TIMEOUT} ] && [ -n "$(config_pid "${CFGFILE}")" ]; do
+	sleep 1
+	count=$((count + 1))
+    done
+    pid=$(config_pid "${CFGFILE}")
+    if [ -n "${pid}" ]; then
+	echo "Forcing LB shutdown with ${CFGFILE} config after ${count} seconds"
+	kill -9 ${pid}
+	error_level=1
+    fi
+    echo "${LBPROCNAME} with ${CFGFILE} stopped"
+}
+
+status_with_config() {
+    CFGFILE="${1}"
+    pid=$(config_pid "${CFGFILE}")
+    if [ -n "${pid}" ]; then
+	echo "${LBPROCNAME} with ${CFGFILE} running, pid ${pid}"
+    else
+	echo "${LBPROCNAME} with ${CFGFILE} not running"
+	error_level=3
+    fi
+}
+
+run_all() {
+    local configs
+    configs=$(list_configs)
+    for c in ${configs}; do ${1} "${c}"; done
+}
+
+case "${1}" in
+    start)
+	run_all start_with_config
+	;;
+    stop)
+	run_all stop_with_config
+	;;
+    status)
+	run_all status_with_config
+	;;
+    restart|reload)
+	run_all stop_with_config
+	error_level=0
+	run_all start_with_config
+	;;
+    *)
+	echo "Usage: ${0} {start|stop|restart|status} [config_file]"
+	exit 1
+esac
+
+exit ${error_level}

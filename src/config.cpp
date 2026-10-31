@@ -935,6 +935,14 @@ int check_node_max_clients(Node *n, int seq_num)
 
 static std::string num(long v) { return std::to_string(v); }
 
+// 5000000 as 5,000,000, as 1.60 printed sizes
+static std::string num_commas(long v)
+{
+  std::string s = std::to_string(v);
+  for(int i = (int)s.size() - 3; i > (v < 0 ? 1 : 0); i -= 3) s.insert(i, ",");
+  return s;
+}
+
 // Load and check the config and print the settings. Returns 0 if the
 // server can start.
 int check_config()
@@ -985,7 +993,7 @@ int check_config()
     nt_print("Socket buffer cache enabled");
     if(cfg.enable_buffer_overflow_detection) {
       nt_print("INFO: Buffer overflow detection is enabled");
-      nt_print("INFO: Buffer overflow size", num(cfg.buffer_overflow_size).c_str());
+      nt_print("INFO: Buffer overflow size", num_commas(cfg.buffer_overflow_size).c_str());
     }
     else {
       nt_print("Buffer overflow detection is disabled");
@@ -1020,7 +1028,7 @@ int check_config()
     nt_print("Logging is enabled");
     if(cfg.clear_log) nt_print("Log file will cleared when LB server is restarted");
     nt_print("Number of log files to keep", num(cfg.num_logs_to_keep).c_str());
-    nt_print("Max log file size set to", num(cfg.max_log_size).c_str());
+    nt_print("Max log file size set to", num_commas(cfg.max_log_size).c_str());
     nt_print("Logging level set to", num(cfg.log_level).c_str());
     nt_print("Log file", cfg.logfile_name.c_str());
     if(cfg.logfile_name.empty()) {
@@ -1048,7 +1056,7 @@ int check_config()
   if(cfg.enable_stats) {
     nt_print("Stats collection is enabled");
     nt_print("Number of stats files to keep", num(cfg.num_stats_to_keep).c_str());
-    nt_print("Max stats file size set to", num(cfg.max_stats_size).c_str());
+    nt_print("Max stats file size set to", num_commas(cfg.max_stats_size).c_str());
     nt_print("Stats file", cfg.stats_file_name.c_str());
     if(!cfg.check_config && !cfg.stats_file_name.empty()) {
       FILE *fp = fopen(cfg.stats_file_name.c_str(), "a");

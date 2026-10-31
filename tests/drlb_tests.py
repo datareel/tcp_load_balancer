@@ -24,7 +24,7 @@ import threading
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SERVER = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, '..', 'drlb_server', 'drlb_server'))
+SERVER = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, '..', 'drlb_server'))
 LB_PORT = 18000
 BACKEND_PORTS = [18011, 18012, 18013]
 WORK = tempfile.mkdtemp(prefix='drlb_tests_')

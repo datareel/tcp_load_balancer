@@ -1,0 +1,47 @@
+#!/bin/bash
+# drlb_platform_check: Check that this host is a supported DRLB platform
+#
+# Supported: RHEL 9 and RHEL 10 (and rebuilds such as Rocky and Alma).
+# Limited:   RHEL 8, only when NetworkManager and firewalld are in use.
+# Dropped:   RHEL 7 and earlier.
+#
+# Run by the DRLB systemd units before the server starts. Set
+# DRLB_SKIP_PLATFORM_CHECK=yes in the /etc/sysconfig file for the
+# service to skip this check.
+
+if [ "${DRLB_SKIP_PLATFORM_CHECK}" == "yes" ]; then exit 0; fi
+if [ ! -f /etc/os-release ]; then exit 0; fi
+
+. /etc/os-release
+
+case " ${ID} ${ID_LIKE} " in
+    *" rhel "*) ;;
+    *) exit 0 ;;
+esac
+
+major="${VERSION_ID%%.*}"
+if [ -z "${major}" ] || [ -n "${major//[0-9]/}" ]; then exit 0; fi
+
+if [ ${major} -lt 8 ]; then
+    echo "ERROR - ${PRETTY_NAME} is not supported. DRLB requires RHEL 9 or RHEL 10, or RHEL 8 with NetworkManager and firewalld" >&2
+    exit 1
+fi
+
+if [ ${major} -eq 8 ]; then
+    error_level=0
+    if ! systemctl -q is-active NetworkManager.service; then
+	echo "ERROR - RHEL 8 is supported only with NetworkManager. NetworkManager is not running" >&2
+	error_level=1
+    fi
+    if ! systemctl -q is-active firewalld.service; then
+	echo "ERROR - RHEL 8 is supported only with firewalld. firewalld is not running" >&2
+	error_level=1
+    fi
+    if systemctl -q is-enabled network.service 2>/dev/null; then
+	echo "ERROR - RHEL 8 is supported only with NetworkManager. Disable the legacy network service" >&2
+	error_level=1
+    fi
+    exit ${error_level}
+fi
+
+exit 0

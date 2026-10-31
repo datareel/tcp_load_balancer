@@ -1,0 +1,17 @@
+# /etc/sysconfig/drlb_server
+# Settings for the drlb_server and drlb_server@ systemd services
+
+# Set to change the path to the server binary
+##LBPROC="/usr/sbin/drlb_server"
+
+# Set to change location of active config list
+##ACTIVE_CONFIGS="/etc/drlb/active_configs.list"
+
+# NOTE: Set for single config if you wish to run only on LB server
+##SINGLECONFIG=/etc/drlb/http_rr_test.cfg
+
+# Seconds to wait for each LB server to stop before it is killed
+##STOP_TIMEOUT=15
+
+# Set to yes to skip the RHEL 8 NetworkManager and firewalld check
+##DRLB_SKIP_PLATFORM_CHECK=no

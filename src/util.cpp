@@ -62,11 +62,13 @@ long to_long(const std::string &s)
 std::string errno_string(int error_number)
 {
   // Same "NAME: description" form as the 1.60 log messages
-  const char *name = strerrorname_np(error_number);
   char buf[256];
   std::string text = strerror_r(error_number, buf, sizeof(buf));
-  if(!name) return "UNKNOWN: " + text;
-  return std::string(name) + ": " + text;
+#if defined(__GLIBC__) && __GLIBC_PREREQ(2, 32)
+  const char *name = strerrorname_np(error_number);
+  if(name) return std::string(name) + ": " + text;
+#endif
+  return "errno " + std::to_string(error_number) + ": " + text;
 }
 
 std::string syslog_time()

@@ -1,0 +1,44 @@
+[Unit]
+Description=DRLB TCP load balancer, SSL bridge (/etc/drlb/ssl_bridge.cfg)
+Documentation=man:drlb_server(8)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+LimitNOFILE=65535
+# 10/25/2026: Run without root and with a restricted view of the system
+User=drlb
+Group=drlb
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/log/drlb
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+UMask=0027
+Environment=CFGFILE=/etc/drlb/ssl_bridge.cfg ARGS=
+EnvironmentFile=-/etc/sysconfig/drlb_ssl_server
+ExecStartPre=/usr/libexec/drlb/drlb_platform_check
+ExecStart=/usr/sbin/drlb_ssl_server --config-file=${CFGFILE} $ARGS
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

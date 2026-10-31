@@ -27,7 +27,7 @@ import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SERVER = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, '..', 'ssl_bridge', 'drlb_ssl_server'))
+SERVER = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, '..', 'drlb_server'))
 LB_PORT = 18100
 PLAIN_PORT = 18111
 TLS_PORT = 18112      # CA signed, subjectAltName DNS:backend.test and IP:127.0.0.1

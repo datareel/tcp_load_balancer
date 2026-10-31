@@ -1,0 +1,11 @@
+# /etc/sysconfig/drlb_ssl_server
+# Settings for the drlb_ssl_server systemd service
+
+# ARGS to pass to the drlb_ssl_server program
+##ARGS=""
+
+# LB config file to use, if not default config
+##CFGFILE="/etc/drlb/ssl_bridge.cfg"
+
+# Set to yes to skip the RHEL 8 NetworkManager and firewalld check
+##DRLB_SKIP_PLATFORM_CHECK=no

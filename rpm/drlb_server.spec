@@ -68,7 +68,8 @@ getent passwd drlb >/dev/null || useradd -r -g drlb -d /var/log/drlb -s /sbin/no
 # its service. Remember its state so %posttrans can restore it.
 mkdir -p /var/lib/rpm-state/drlb
 rm -f /var/lib/rpm-state/drlb/ssl_enabled /var/lib/rpm-state/drlb/ssl_active
-if rpm -q drlb_ssl_server >/dev/null 2>&1 && [ "$(rpm -q --qf '%%{VERSION}' drlb_ssl_server)" != "%{version}" ]; then
+# Only the 1.60 drlb_ssl_server package installs this file
+if [ -f /usr/share/doc/drlb_ssl_bridge/version.txt ]; then
     systemctl is-enabled --quiet drlb_ssl_server.service 2>/dev/null && touch /var/lib/rpm-state/drlb/ssl_enabled
     systemctl is-active --quiet drlb_ssl_server.service 2>/dev/null && touch /var/lib/rpm-state/drlb/ssl_active
 fi

@@ -145,7 +145,9 @@ void queue_message(int queue, const std::string &mesg)
         dropped++;
       }
       q.push_back(LogEntry{next_seq++, std::move(line)});
-      queue_cond.notify_one();
+      // The log thread wakes every 200 ms on its own; only wake it early
+      // when a queue is filling up
+      if((int)q.size() * 2 >= *sizes[queue]) queue_cond.notify_one();
       return;
     }
   }
@@ -175,9 +177,7 @@ void log_thread_main()
 {
   std::unique_lock<std::mutex> lock(queue_lock);
   while(true) {
-    queue_cond.wait_for(lock, std::chrono::seconds(1), [] {
-      return log_thread_stop || !queues[0].empty() || !queues[1].empty() || !queues[2].empty();
-    });
+    queue_cond.wait_for(lock, std::chrono::milliseconds(200), [] { return log_thread_stop; });
     std::vector<std::string> lines = take_all();
     bool stop = log_thread_stop;
     lock.unlock();

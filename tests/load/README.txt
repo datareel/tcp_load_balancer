@@ -18,7 +18,7 @@ second, like an application server with a fixed worker pool.
 
 Requirements: ab (dnf install httpd-tools), Python 3 with matplotlib
 (dnf install python3-matplotlib), the built drlb_server, and for the
-overhead test the SSL bridge built in ../ssl-bridge and openssl.
+overhead test openssl. The charts in results/ are from the 1.60 release.
 
 Run all experiments (about 10 minutes):
 

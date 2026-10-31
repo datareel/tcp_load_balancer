@@ -183,6 +183,7 @@ def test_config_quirks():
                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     weights = re.findall(r'LB node weight (\d+)', p.stdout)
     lb = LB('quirks', path)
+    time.sleep(1)  # Let the startup probe connection finish
     nodes = {}
     for _ in range(40):
         try:
@@ -213,6 +214,7 @@ def test_debug_signals():
 
 def test_max_connections():
     lb = LB('maxconn', config('maxconn', ['max_connections = 3']))
+    time.sleep(1)  # Let the startup probe connection finish
     socks = []
     for _ in range(2):
         s = socket.create_connection(('127.0.0.1', LB_PORT))

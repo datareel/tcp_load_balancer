@@ -21,7 +21,9 @@ const char *VersionString = "2.0-beta";
 const char *ProgramDescription = "DRLB TCP Load Balancer";
 const char *ProducedBy = "http://datareel.com";
 
-Config cfg;
+// Never destroyed: detached threads (signal, and client threads still
+// running at exit) may use it while the process exits.
+Config &cfg = *new Config;
 
 void version_message()
 {

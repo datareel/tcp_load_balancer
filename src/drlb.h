@@ -211,7 +211,7 @@ struct Config {
   bool debug_at(int level) const { return debug && debug_level >= level; }
 };
 
-extern Config cfg;
+extern Config &cfg;
 
 // A limit for one node, used by the distributed and weighted schemes
 struct LimitNode {

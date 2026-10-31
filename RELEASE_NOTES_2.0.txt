@@ -1,0 +1,68 @@
+DRLB 2.0 beta release notes
+DRLB TCP load balancer, 10/31/2026
+
+This is a beta release. Test it before production use.
+
+Overview
+--------
+* One program, drlb_server, replaces the 1.60 load-balancer
+  (drlb_server) and ssl-bridge (drlb_ssl_server) packages.
+* Rewritten in C++17 with the standard library, POSIX sockets and
+  OpenSSL. The DataReel library is no longer used.
+* A config file with an [SSLCONFIG] section terminates SSL/TLS on the
+  frontend, like drlb_ssl_server 1.60. A config without one is a plain
+  TCP load balancer, like drlb_server 1.60. Config files are unchanged.
+* drlb_ssl_server is installed as a link to drlb_server, and the
+  drlb_ssl_server service is unchanged.
+* One RPM for RHEL 9 and RHEL 10. It replaces both 1.60 RPMs and keeps
+  drlb_ssl_server.service enabled and running if it was.
+
+Unchanged from 1.60
+-------------------
+All settings and defaults, the four schemes, dead node handling,
+retries, throttling, X-Forwarded-For rewriting, idle, write, connect and
+handshake timeouts, connection and thread limits, buffer overflow
+detection, log and stats file formats and rotation, command line
+options, signals (SIGTERM/SIGINT stop, SIGUSR1/SIGUSR2 debug level,
+SIGHUP logged only), TLS 1.2 minimum, system crypto policy ciphers,
+backend certificate verification, the drlb user and the systemd units
+and sandboxing. IPv4 only, as before.
+
+Behavior changes
+----------------
+* drlb_ssl_server with a config that has no [SSLCONFIG] section stops
+  with an error. 1.60 rewrote the config file to add a default
+  [SSLCONFIG] section (which the systemd sandbox does not allow).
+* --check-config on an SSL config also loads the key, certificate and
+  CA files and checks the TLS settings. 1.60 checked them only when the
+  server started.
+* Setting names must match exactly; 1.60 matched some names as
+  substrings. Unknown settings print a warning instead of being
+  ignored silently. Lines longer than 1023 characters are no longer
+  split.
+* A listen_ip_addr that is not an IPv4 address is an error. 1.60
+  listened on all addresses. Port numbers must be 1-65535.
+* Shutdown ends as soon as open connections close, instead of after
+  fixed sleeps (about 12 seconds in 1.60).
+* When a client thread cannot be created (out of memory or threads),
+  that connection is closed and the server keeps running. 1.60 stopped
+  accepting connections.
+* Log messages are time stamped when they are logged, written in order,
+  and no longer cut at 254 characters. When a log queue is full the
+  oldest message is dropped and the number dropped is logged.
+* LB_DISTRIB: the previous connection level is now set when the limits
+  are rebuilt. 1.60 added 1 to it instead (a bug), so the limits were
+  rarely lowered after a busy period.
+* LB_ASSIGNED: rules are compiled once at startup, and the client's
+  reverse DNS name is looked up once per connection instead of once per
+  rule.
+* ssl_cert_file may hold the certificate followed by its chain; the
+  whole chain is sent to clients.
+* Backend connect errors are logged with the system error text, for
+  example "ECONNREFUSED: Connection refused".
+* Message typos fixed ("Staring", "Timout", "decresed").
+
+Testing
+-------
+make test runs tests/drlb_tests.py and tests/ssl_bridge_tests.py (the
+1.60 regression suites) and tests/compat_tests.py (2.0 checks).

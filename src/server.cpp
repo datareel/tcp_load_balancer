@@ -25,7 +25,8 @@ namespace drlb {
 namespace {
 
 int listen_fd = -1;
-int wake_pipe[2] = {-1, -1}; // Written by request_stop() to end the accept loop
+int wake_pipe[2] = {-1, -1};  // Written by request_stop() to end the accept loop
+std::atomic<int> wake_fd{-1}; // wake_pipe[1] once the pipe is ready
 std::thread accept_thread;
 
 std::string seq(const ClientSocket *s)
@@ -300,9 +301,10 @@ void request_stop()
     cfg.kill_server = true;
   }
   cfg.stop_cond.notify_all();
-  if(wake_pipe[1] >= 0) {
+  int fd = wake_fd;
+  if(fd >= 0) {
     char c = 1;
-    if(write(wake_pipe[1], &c, 1) < 0) { } // The pipe is non-blocking; one byte is enough
+    if(write(fd, &c, 1) < 0) { } // The pipe is non-blocking; one byte is enough
   }
 }
 
@@ -340,6 +342,7 @@ int run_server()
     stop_log_thread();
     return 1;
   }
+  wake_fd = wake_pipe[1];
   try {
     accept_thread = std::thread(accept_thread_main);
   }

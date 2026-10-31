@@ -206,7 +206,7 @@ static Node *limited(ClientSocket *s, bool weighted)
         set_positive(cfg.refactored_connections, refactor_distribution_limits(limits, num_connections));
       }
       set_positive(cfg.prev_refactored_connections, cfg.refactored_connections);
-      change = "decresed";
+      change = "decreased";
     }
     if(change && cfg.debug) {
       for(const LimitNode &l : limits) {

@@ -15,7 +15,7 @@
 #
 # Usage: python3 tests/load/run_load_tests.py [--quick] [experiment ...]
 # Needs the ab command (httpd-tools), Python 3 with matplotlib, and the
-# built servers. The SSL bridge test also needs ../ssl-bridge and openssl.
+# built server. The SSL bridge test also needs openssl.
 
 import argparse
 import asyncio
@@ -32,8 +32,8 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOP = os.path.abspath(os.path.join(HERE, '..', '..'))
-DRLB = os.path.join(TOP, 'drlb_server', 'drlb_server')
-SSL_BRIDGE = os.path.abspath(os.path.join(TOP, '..', 'ssl-bridge', 'ssl_bridge', 'drlb_ssl_server'))
+DRLB = os.path.join(TOP, 'drlb_server')
+SSL_BRIDGE = DRLB  # 2.0: the same program, with an [SSLCONFIG] section
 OUT = os.path.join(HERE, 'results')
 WORK = tempfile.mkdtemp(prefix='drlb_load_')
 LB_PORT = 18300

@@ -37,8 +37,8 @@ and firewalld (and rebuilds such as Rocky Linux and AlmaLinux).
 
 ## Building
 
-RHEL 8, RHEL 9 or RHEL 10 with OpenSSL 3.5 or later (RHEL 8: RHEL 8.10
-with the OpenSSL 3.5 updates). Older OpenSSL headers stop the build:
+RHEL 8, RHEL 9 or RHEL 10 with OpenSSL 3.5 or later (RHEL 8: the EPEL
+`openssl3-devel` package, OpenSSL 3.5; `make OPENSSL_PKG=openssl3`). Older OpenSSL headers stop the build:
 
 ```
 sudo dnf -y install gcc-c++ make openssl-devel

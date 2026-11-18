@@ -18,7 +18,10 @@ OpenSSL 3.5 on RHEL 8
   - CMake needs OpenSSL 3.5 (find_package(OpenSSL 3.5 REQUIRED)).
   - New Makefile option OPENSSL_PREFIX=/path for an OpenSSL 3.5 install
     that is not the system one (sets -I, -L and a matching rpath).
-* RHEL 8 hosts need RHEL 8.10 with the updates that bring OpenSSL 3.5.
+* RHEL 8 ships only OpenSSL 1.1.1k. The RHEL 8 RPM is built with the
+  EPEL openssl3-devel package (OpenSSL 3.5, OPENSSL_PKG=openssl3, chosen
+  by make_rpm_package.sh rhel8 when it is installed), and RHEL 8 hosts
+  need EPEL enabled so dnf can install openssl3-libs.
   On an RHEL 8 host that still has OpenSSL 1.1.1, dnf will not install
   the 2.0.1 RPM.
 

@@ -38,7 +38,7 @@ make clean
 # OpenSSL 3.5 or later only (the build also stops in src/tls.cpp)
 OPENSSL_HDR=$(make -s openssl-check) || {
     echo "ERROR - OpenSSL 3.5 or later headers are required (openssl-devel)."
-    echo "ERROR - On RHEL 8 apply the RHEL 8.10 updates that bring OpenSSL 3.5."
+    echo "ERROR - On RHEL 8 install the EPEL openssl3-devel package (OpenSSL 3.5)."
     exit 1
 }
 echo "Building with ${OPENSSL_HDR}"

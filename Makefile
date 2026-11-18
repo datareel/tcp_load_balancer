@@ -10,8 +10,8 @@
 #
 # OPENSSL_PREFIX=/path  build against an OpenSSL 3.5 install that is not
 #                       the system one (adds -I, -L and a matching rpath).
-#                       RHEL 8 builds normally use the RHEL 8.10 system
-#                       OpenSSL 3.5 and leave this unset.
+#                       RHEL 8 builds use OPENSSL_PKG=openssl3 (EPEL)
+#                       instead.
 # OPENSSL_PKG=openssl3  build against the pkg-config package named, for
 #                       example the EPEL openssl3-devel (OpenSSL 3.5) on
 #                       RHEL 8, whose headers are in /usr/include/openssl3.

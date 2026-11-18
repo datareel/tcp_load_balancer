@@ -139,7 +139,13 @@ The RPM is copied to `~/rpmbuild/RPMS/x86_64`. Install it:
 | RHEL 8 | `sudo dnf -y install ~/rpmbuild/RPMS/x86_64/drlb_server-2.0.1-1.el8.x86_64.rpm` |
 
 OpenSSL 3.5 or later is required on every release. RHEL 9 and RHEL 10
-ship it; RHEL 8 needs RHEL 8.10 with the updates that bring OpenSSL 3.5.
+ship it. RHEL 8 ships OpenSSL 1.1.1k, so RHEL 8 uses the EPEL
+`openssl3` packages (OpenSSL 3.5): build hosts need `openssl3-devel`
+(`dnf install epel-release && dnf install openssl3-devel`), and
+`make_rpm_package.sh rhel8` then builds with `OPENSSL_PKG=openssl3`
+by itself. RHEL 8 hosts that run DRLB need EPEL enabled so dnf can
+install `openssl3-libs`; the RPM requires the OpenSSL 3.5 libraries,
+not a package name.
 The build stops on older OpenSSL headers, `make_rpm_package.sh` refuses
 a binary or RPM that is not on OpenSSL 3.5, the RPM requires the
 OpenSSL 3.5 libraries, and `drlb_server` stops at start on an older

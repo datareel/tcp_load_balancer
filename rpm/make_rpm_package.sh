@@ -69,7 +69,11 @@ gzip -9 -n -c man/drlb_ssl_server.8 > "${STAGE}/usr/share/man/man8/drlb_ssl_serv
 tar czf "${TOPDIR}/BUILD/drlb_server.tar.gz" -C "${STAGE}" .
 cp "${HERE}/drlb_server.spec" "${TOPDIR}/SPECS/"
 
+# The RPM header records the build host. Use a neutral name so the name
+# of the machine that built the release never ends up in the package.
+DRLB_BUILDHOST=${DRLB_BUILDHOST:-datareel-build}
 rpmbuild -bb --define "_topdir ${TOPDIR}" --define "dist ${DIST}" \
+    --define "_buildhost ${DRLB_BUILDHOST}" \
     --define "drlb_tarball ${TOPDIR}/BUILD/drlb_server.tar.gz" \
     --buildroot "${TOPDIR}/BUILDROOT" "${TOPDIR}/SPECS/drlb_server.spec"
 
@@ -78,6 +82,10 @@ RPM=$(ls "${TOPDIR}"/RPMS/x86_64/drlb_server-*.rpm)
 if rpm -qpR "${RPM}" | grep -q 'libssl.so.1' || ! rpm -qpR "${RPM}" | grep -q 'libssl.so.3(OPENSSL_3.5.0)'; then
     echo "ERROR - ${RPM} does not require OpenSSL 3.5:"
     rpm -qpR "${RPM}" | grep -E 'ssl|crypto'
+    exit 1
+fi
+if [ "$(rpm -qp --qf '%{BUILDHOST}' "${RPM}")" != "${DRLB_BUILDHOST}" ]; then
+    echo "ERROR - ${RPM} build host is not ${DRLB_BUILDHOST}"
     exit 1
 fi
 echo "OpenSSL in ${RPM##*/}: ${OPENSSL_HDR}, $(ldd drlb_server | grep -oE 'libssl[^ ]*' | head -1)"

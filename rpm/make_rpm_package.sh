@@ -120,7 +120,7 @@ RPM=$(ls "${TOPDIR}"/RPMS/x86_64/${NAME}-2*.rpm)
 REQ=$(rpm -qpR "${RPM}")
 case "${FLAVOR}" in
     fips) echo "${REQ}" | grep -q 'libssl.so.1.1' || { echo "ERROR - ${RPM} does not require the system OpenSSL 1.1.1"; exit 1; } ;;
-    static35) if echo "${REQ}" | grep -qE 'libssl|libcrypto|openssl'; then
+    static35) if echo "${REQ}" | grep -qE '^(libssl|libcrypto|openssl)'; then
                   echo "ERROR - ${RPM} requires a shared OpenSSL:"; echo "${REQ}" | grep -E 'ssl|crypto'; exit 1
               fi ;;
     *) if echo "${REQ}" | grep -q 'libssl.so.1' || ! echo "${REQ}" | grep -q 'libssl.so.3(OPENSSL_3.5.0)'; then

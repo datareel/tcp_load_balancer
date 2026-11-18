@@ -20,8 +20,8 @@
 #
 # Needs: gcc, make, perl, perl-IPC-Cmd, perl-Time-Piece, curl.
 # Then build the RPM with: rpm/make_rpm_package.sh rhel8-openssl35
-# (make_rpm_package.sh uses OPENSSL35_PREFIX, default
-# ${DESTDIR}/opt/openssl-3.5).
+# (make_rpm_package.sh uses OPENSSL35_PREFIX, default /opt/openssl-3.5;
+# with DESTDIR set OPENSSL35_PREFIX=${DESTDIR}/opt/openssl-3.5).
 set -eu
 OSSL_VERSION=3.5.9
 OSSL_SHA256=603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a

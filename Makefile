@@ -12,6 +12,10 @@
 #                       the system one (adds -I, -L and a matching rpath).
 #                       RHEL 8 builds normally use the RHEL 8.10 system
 #                       OpenSSL 3.5 and leave this unset.
+# OPENSSL_PKG=openssl3  build against the pkg-config package named, for
+#                       example the EPEL openssl3-devel (OpenSSL 3.5) on
+#                       RHEL 8, whose headers are in /usr/include/openssl3.
+#                       The runtime library is the normal libssl.so.3.
 # make openssl-check    print the OpenSSL headers version used
 
 CXX      ?= g++
@@ -19,6 +23,15 @@ CXXFLAGS ?= -O2 -g
 CXXFLAGS += -std=c++17 -Wall -Wextra -pthread
 LDFLAGS  ?=
 LDLIBS   += -lssl -lcrypto -pthread
+
+OPENSSL_PKG ?=
+ifneq ($(OPENSSL_PKG),)
+ifneq ($(shell pkg-config --exists $(OPENSSL_PKG) && echo yes),yes)
+$(error pkg-config package $(OPENSSL_PKG) not found, install its -devel package)
+endif
+CXXFLAGS += $(shell pkg-config --cflags $(OPENSSL_PKG))
+LDFLAGS  += $(shell pkg-config --libs-only-L $(OPENSSL_PKG))
+endif
 
 OPENSSL_PREFIX ?=
 ifneq ($(OPENSSL_PREFIX),)

@@ -26,6 +26,14 @@ rm -rf "${BUILDDIR}"
 mkdir -p "${STAGE}" "${TOPDIR}"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 
 cd "${TOP}"
+# RHEL 8: the RHEL 8 openssl-devel is 1.1.1k. Use the EPEL openssl3-devel
+# (OpenSSL 3.5) when it is installed and nothing else was chosen.
+if [ "${OS}" = "rhel8" ] && [ -z "${OPENSSL_PKG}" ] && [ -z "${OPENSSL_PREFIX}" ] && \
+   pkg-config --exists openssl3 2>/dev/null; then
+    export OPENSSL_PKG=openssl3
+    echo "RHEL 8: building with pkg-config openssl3 $(pkg-config --modversion openssl3)"
+fi
+export OPENSSL_PKG OPENSSL_PREFIX
 make clean
 # OpenSSL 3.5 or later only (the build also stops in src/tls.cpp)
 OPENSSL_HDR=$(make -s openssl-check) || {

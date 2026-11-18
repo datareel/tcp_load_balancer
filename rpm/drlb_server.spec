@@ -129,10 +129,11 @@ exit 0
 %changelog
 * Wed Nov 18 2026 Datareel <datareel.com>
 - Version 2.0.1
-- Built and run only on OpenSSL 3.5 LTS or later on RHEL 8, 9 and 10.
-  The 2.0 RHEL 8 RPM was built on OpenSSL 1.1.1k by mistake.
-- Build stops on OpenSSL headers older than 3.5, the program stops at
-  start on an older library, and the RPM requires OpenSSL 3.5 libraries
+- RHEL 8 has two packages, like DRCM 1.49: drlb_server (FIPS build,
+  system OpenSSL 1.1.1, classic TLS) and drlb_server-openssl35 (static
+  OpenSSL 3.5.9, post-quantum TLS); dnf swap moves a host between them
+- RHEL 9 and 10: OpenSSL 3.5 required at build and run time and in the
+  RPM requires
 - Post-quantum TLS: hybrid ML-KEM key exchange (X25519MLKEM768 first)
   on the frontend and backends by default, ML-DSA certificates
 - New [SSLCONFIG] settings ssl_groups and ssl_sigalgs

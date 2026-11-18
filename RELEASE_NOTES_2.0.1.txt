@@ -1,32 +1,59 @@
 DRLB 2.0.1 release notes
 DRLB TCP load balancer, 11/18/2026 (not yet released)
 
-OpenSSL 3.5 on RHEL 8
----------------------
-* The 2.0 RHEL 8 RPM (drlb_server-2.0-1.el8) was built on the RHEL 8
-  OpenSSL 1.1.1k (it links libssl.so.1.1). DataReel only ships builds on
-  OpenSSL 3.5 LTS or later, so 2.0.1 replaces it. The RHEL 9 and RHEL 10
+OpenSSL on RHEL 8: two packages (same model as DRCM 1.49)
+---------------------------------------------------------
+* The 2.0 RHEL 8 RPM (drlb_server-2.0-1.el8) linked the RHEL 8 OpenSSL
+  1.1.1k with nothing that said so or checked it. The RHEL 9 and RHEL 10
   2.0 RPMs were already on OpenSSL 3.5.
-* 2.0.1 is built on OpenSSL 3.5 or later on RHEL 8, 9 and 10:
-  - The build stops on OpenSSL headers older than 3.5 (src/tls.cpp).
-    "make openssl-check" prints the OpenSSL version the build uses.
-  - drlb_server stops at start if the OpenSSL library is older than 3.5.
-  - The RPM requires libssl.so.3(OPENSSL_3.5.0) and
-    libcrypto.so.3(OPENSSL_3.5.0) instead of any openssl-libs.
-  - rpm/make_rpm_package.sh refuses a binary that links libssl.so.1.x
-    and an RPM that does not require the OpenSSL 3.5 libraries.
+* RHEL 8 now has two packages, like DRCM 1.49. Install one of them:
+  - drlb_server-2.0.1-1.el8: the RHEL 8 system OpenSSL 1.1.1, which Red
+    Hat validated for FIPS 140. This is the FIPS build: classic TLS
+    only, and the TLS groups, signature algorithms and ciphers follow
+    the system crypto policy (update-crypto-policies). It is where
+    "dnf upgrade" from 2.0 lands.
+  - drlb_server-openssl35-2.0.1-1.el8: OpenSSL 3.5.9 LTS built in
+    statically, with post-quantum TLS. It needs no OpenSSL package (no
+    EPEL) and has no rpath. Not for FIPS mode: the built-in OpenSSL is
+    not FIPS validated, and it does not read the system crypto policy
+    (its OpenSSL config path is /opt/openssl-3.5/ssl, which is not
+    installed). It provides drlb_server and conflicts with it; move a
+    host between the two with
+      dnf swap drlb_server drlb_server-openssl35-2.0.1-1.el8.x86_64.rpm
+    (and back the same way). The config, keys and service state stay.
+  OpenSSL security fixes for the openssl35 package mean a new DRLB
+  build: rpm/build_openssl35.sh pins the OpenSSL version and SHA-256.
+* Build checks:
+  - Every build except the RHEL 8 FIPS build stops on OpenSSL headers
+    older than 3.5 (src/tls.cpp), and the program stops at start on an
+    older library. The FIPS build needs the explicit "make FIPS_BUILD=1"
+    and allows OpenSSL 1.1.1 or later.
+  - "make OPENSSL_PREFIX=/opt/openssl-3.5 OPENSSL_STATIC=1" links a
+    static OpenSSL; rpm/build_openssl35.sh builds OpenSSL 3.5.9 from the
+    official tarball with a pinned SHA-256 (same script and version as
+    DRCM 1.49).
+  - rpm/make_rpm_package.sh rhel8 | rhel8-openssl35 | rhel9 | rhel10
+    checks each package: rhel8 must link libssl.so.1.1 and be a FIPS
+    build, rhel8-openssl35 must have no libssl/libcrypto in NEEDED, no
+    rpath, no OpenSSL requires and OpenSSL 3.5, rhel9/rhel10 must
+    require libssl.so.3(OPENSSL_3.5.0).
+  - drlb_server --version prints the OpenSSL it runs with, the flavor
+    (system or static) and FIPS state.
+  - The RPM build host is "datareel-build" (DRLB_BUILDHOST), and the
+    script refuses an RPM that records another one.
   - CMake needs OpenSSL 3.5 (find_package(OpenSSL 3.5 REQUIRED)).
-  - New Makefile option OPENSSL_PREFIX=/path for an OpenSSL 3.5 install
-    that is not the system one (sets -I, -L and a matching rpath).
-* RHEL 8 ships only OpenSSL 1.1.1k. The RHEL 8 RPM is built with the
-  EPEL openssl3-devel package (OpenSSL 3.5, OPENSSL_PKG=openssl3, chosen
-  by make_rpm_package.sh rhel8 when it is installed), and RHEL 8 hosts
-  need EPEL enabled so dnf can install openssl3-libs.
-  On an RHEL 8 host that still has OpenSSL 1.1.1, dnf will not install
-  the 2.0.1 RPM.
+  - Optional: make OPENSSL_PKG=name builds against a pkg-config package
+    such as the EPEL openssl3-devel. No package is shipped that way.
+* Backend certificate checks with no ssl_backend_ca_list_file also load
+  /etc/pki/tls/certs/ca-bundle.crt, so the static OpenSSL (whose default
+  paths are under /opt/openssl-3.5) still uses the RHEL trust store.
 
 Post-quantum TLS
 ----------------
+(RHEL 9, RHEL 10 and the RHEL 8 drlb_server-openssl35 package. The RHEL 8
+FIPS build drlb_server has no post-quantum TLS: it logs that at start,
+and ssl_groups and ssl_sigalgs are ignored there with a warning instead
+of stopping the server.)
 * Key exchange: DRLB now sets the TLS key exchange groups itself, with
   the hybrid post-quantum ML-KEM groups (FIPS 203) first:
   X25519MLKEM768, SecP256r1MLKEM768, SecP384r1MLKEM1024, then X25519,

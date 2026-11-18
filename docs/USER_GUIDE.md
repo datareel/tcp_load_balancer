@@ -136,22 +136,71 @@ The RPM is copied to `~/rpmbuild/RPMS/x86_64`. Install it:
 |---|---|
 | RHEL 10 | `sudo dnf -y install ~/rpmbuild/RPMS/x86_64/drlb_server-2.0.1-1.el10.x86_64.rpm` |
 | RHEL 9 | `sudo dnf -y install ~/rpmbuild/RPMS/x86_64/drlb_server-2.0.1-1.el9.x86_64.rpm` |
-| RHEL 8 | `sudo dnf -y install ~/rpmbuild/RPMS/x86_64/drlb_server-2.0.1-1.el8.x86_64.rpm` |
+| RHEL 8, FIPS build | `sudo dnf -y install ~/rpmbuild/RPMS/x86_64/drlb_server-2.0.1-1.el8.x86_64.rpm` |
+| RHEL 8, post-quantum TLS | `sudo dnf -y install ~/rpmbuild/RPMS/x86_64/drlb_server-openssl35-2.0.1-1.el8.x86_64.rpm` |
 
-OpenSSL 3.5 or later is required on every release. RHEL 9 and RHEL 10
-ship it. RHEL 8 ships OpenSSL 1.1.1k, so RHEL 8 uses the EPEL
-`openssl3` packages (OpenSSL 3.5): build hosts need `openssl3-devel`
-(`dnf install epel-release && dnf install openssl3-devel`), and
-`make_rpm_package.sh rhel8` then builds with `OPENSSL_PKG=openssl3`
-by itself. RHEL 8 hosts that run DRLB need EPEL enabled so dnf can
-install `openssl3-libs`; the RPM requires the OpenSSL 3.5 libraries,
-not a package name.
-The build stops on older OpenSSL headers, `make_rpm_package.sh` refuses
-a binary or RPM that is not on OpenSSL 3.5, the RPM requires the
-OpenSSL 3.5 libraries, and `drlb_server` stops at start on an older
-library. `make openssl-check` prints the OpenSSL version the build uses.
-`make OPENSSL_PREFIX=/path` builds against an OpenSSL 3.5 install that
-is not the system one.
+OpenSSL 3.5 or later is required on RHEL 9 and RHEL 10, which ship it.
+RHEL 8 ships OpenSSL 1.1.1k and has two packages, the same model as
+DRCM 1.49. Install one of them:
+
+| RHEL 8 package | OpenSSL | TLS | Use it for |
+|---|---|---|---|
+| `drlb_server` | RHEL 8 system OpenSSL 1.1.1 (FIPS 140 validated by Red Hat) | classic only; groups, signature algorithms and ciphers from the system crypto policy | FIPS mode hosts; where `dnf upgrade` from 2.0 lands |
+| `drlb_server-openssl35` | OpenSSL 3.5.9 LTS built in statically; no OpenSSL package, no EPEL, no rpath | post-quantum (hybrid ML-KEM, ML-DSA) | every host not in FIPS mode |
+
+Build them with:
+
+```
+$ cd rpm
+$ ./make_rpm_package.sh rhel8                 # drlb_server, FIPS build
+$ ./build_openssl35.sh                        # static OpenSSL 3.5.9 in /opt/openssl-3.5
+$ ./make_rpm_package.sh rhel8-openssl35       # drlb_server-openssl35
+```
+
+`build_openssl35.sh` downloads the OpenSSL 3.5.9 tarball and stops
+unless its SHA-256 matches the pinned value (same script and version
+as DRCM 1.49). It needs gcc, make, perl, perl-IPC-Cmd,
+perl-Time-Piece and curl. `DESTDIR=/path` installs it without root
+(then set `OPENSSL35_PREFIX=/path/opt/openssl-3.5`), and
+`TARBALL_DIR=/path` uses a downloaded tarball. An OpenSSL security fix
+means a new OpenSSL version in that script and a new
+`drlb_server-openssl35` build.
+
+`drlb_server-openssl35` provides `drlb_server` and conflicts with it.
+Stop DRLB, then move a host between the two with `dnf swap`; the config,
+keys and service state stay:
+
+```
+# dnf swap drlb_server ./drlb_server-openssl35-2.0.1-1.el8.x86_64.rpm
+# dnf swap drlb_server-openssl35 ./drlb_server-2.0.1-1.el8.x86_64.rpm
+```
+
+Notes on the RHEL 8 packages:
+
+- The FIPS build (`make FIPS_BUILD=1`) is the only build allowed on
+  OpenSSL 1.1.1. It logs at start that post-quantum TLS is not
+  available, and `ssl_groups` and `ssl_sigalgs` are ignored with a
+  warning there: the system crypto policy decides. On a host with the
+  LEGACY crypto policy that includes 3DES for TLS 1.2; use the DEFAULT
+  or FIPS policy.
+- The static OpenSSL 3.5 does not read the system crypto policy (its
+  config path, `/opt/openssl-3.5/ssl`, is not installed), so DRLB's own
+  defaults apply: TLS 1.2 minimum, OpenSSL 3.5 default ciphers, hybrid
+  ML-KEM groups first. It is not FIPS validated; use `drlb_server` in
+  FIPS mode.
+- Backend certificate checks with no `ssl_backend_ca_list_file` also
+  load `/etc/pki/tls/certs/ca-bundle.crt`, so the static OpenSSL still
+  uses the RHEL trust store.
+
+Every other build stops on OpenSSL headers older than 3.5, and
+`drlb_server` stops at start on an older library. `make_rpm_package.sh`
+checks each package's OpenSSL linkage and requirements, and sets the
+RPM build host to `datareel-build` (`DRLB_BUILDHOST`).
+`drlb_server --version` prints the OpenSSL it runs with (version,
+system or static, FIPS build, FIPS mode). `make openssl-check` prints
+the OpenSSL headers the build uses. `make OPENSSL_PKG=name` (pkg-config,
+for example the EPEL `openssl3-devel`) is available for local builds;
+no package is shipped that way.
 
 `make_rpm_package.sh` takes an optional second argument, the scratch
 build directory (default `/tmp/drlb_build_<user>`).
@@ -1375,8 +1424,11 @@ settings apply to back end TLS.
 
 ### Post-quantum key exchange and certificates
 
-DRLB 2.0.1 needs OpenSSL 3.5 or later and uses the hybrid post-quantum
-key exchange groups by default, on the front end and the back end:
+DRLB 2.0.1 on OpenSSL 3.5 (RHEL 9, RHEL 10, the RHEL 8
+`drlb_server-openssl35` package) uses the hybrid post-quantum key
+exchange groups by default, on the front end and the back end. (The
+RHEL 8 FIPS build `drlb_server` has no post-quantum TLS and ignores
+these two settings with a warning; the crypto policy decides there.)
 
 | Setting | Default | Meaning |
 |---|---|---|

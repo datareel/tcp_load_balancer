@@ -28,7 +28,11 @@ Key exchange uses the hybrid post-quantum ML-KEM groups first
 .B ssl_groups
 and
 .B ssl_sigalgs
-settings change the lists. OpenSSL 3.5 or later is required.
+settings change the lists. OpenSSL 3.5 or later is required, except
+the RHEL 8 FIPS build (system OpenSSL 1.1.1, no post-quantum TLS);
+on RHEL 8 the drlb_server-openssl35 package has OpenSSL 3.5 built in.
+.B drlb_server --version
+prints the OpenSSL in use.
 .PP
 .B drlb_ssl_server
 is a link to

@@ -37,8 +37,12 @@ and firewalld (and rebuilds such as Rocky Linux and AlmaLinux).
 
 ## Building
 
-RHEL 8, RHEL 9 or RHEL 10 with OpenSSL 3.5 or later (RHEL 8: the EPEL
-`openssl3-devel` package, OpenSSL 3.5; `make OPENSSL_PKG=openssl3`). Older OpenSSL headers stop the build:
+RHEL 9 or RHEL 10 with OpenSSL 3.5 or later; older OpenSSL headers stop
+the build. RHEL 8 has two builds, like DRCM 1.49: `make FIPS_BUILD=1`
+(the system OpenSSL 1.1.1, FIPS validated, classic TLS) and
+`rpm/build_openssl35.sh` then
+`make OPENSSL_PREFIX=/opt/openssl-3.5 OPENSSL_STATIC=1` (OpenSSL 3.5.9
+built in, post-quantum TLS).
 
 ```
 sudo dnf -y install gcc-c++ make openssl-devel
@@ -53,8 +57,11 @@ CMake also works: `cmake -S . -B build-cmake && cmake --build build-cmake`.
 ## RPM
 
 Build the RPM on the RHEL version it is for (also needs `rpm-build`).
-The RPM is `drlb_server-2.0.1-1.el8`, `.el9` or `.el10` and requires the
-OpenSSL 3.5 libraries:
+The RPMs are `drlb_server-2.0.1-1.el9` and `.el10` (system OpenSSL 3.5),
+and on RHEL 8 either `drlb_server-2.0.1-1.el8` (FIPS build, system
+OpenSSL 1.1.1) or `drlb_server-openssl35-2.0.1-1.el8` (OpenSSL 3.5 built
+in, post-quantum TLS; `./make_rpm_package.sh rhel8-openssl35` after
+`./build_openssl35.sh`). `dnf swap` moves a RHEL 8 host between the two:
 
 ```
 cd rpm

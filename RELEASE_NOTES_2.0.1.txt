@@ -41,6 +41,12 @@ Post-quantum TLS
   mldsa87, mldsa44 plus the ECDSA, EdDSA, RSA-PSS and RSA PKCS#1
   algorithms of the RHEL DEFAULT policy. RSA and ECDSA certificates
   work as before. The log shows the certificate key type at start.
+* ML-DSA certificates and clients: a client must also support ML-DSA to
+  verify an ML-DSA server certificate. Clients that follow the RHEL 9
+  DEFAULT crypto policy (and RHEL 8, and most browsers today) offer no
+  ML-DSA signature algorithms and fail the handshake, so keep an RSA or
+  ECDSA certificate on public frontends. Key exchange (ML-KEM) needs
+  nothing from the certificate and works with any certificate type.
 * New [SSLCONFIG] settings:
     ssl_groups   key exchange groups (OpenSSL 3.5 list syntax)
     ssl_sigalgs  signature algorithms

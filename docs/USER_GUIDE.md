@@ -1391,6 +1391,12 @@ algorithms of the RHEL DEFAULT policy, so an ML-DSA certificate works on
 the front end and on back ends. RSA and ECDSA certificates work as
 before; no key type is required.
 
+A client must also support ML-DSA to verify an ML-DSA certificate.
+Clients that follow the RHEL 8 or RHEL 9 DEFAULT crypto policy (and most
+browsers today) offer no ML-DSA signature algorithms and fail the
+handshake, so keep an RSA or ECDSA certificate on public front ends. The
+ML-KEM key exchange works with any certificate type.
+
 In FIPS mode both settings default to `system`, so the FIPS crypto
 policy decides. Post-quantum key exchange needs TLS 1.3: with
 `ssl_protocol = TLSv1_2` the server logs a warning. At `log_level = 4`

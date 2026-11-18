@@ -28,6 +28,11 @@ LB_PORT = 18300
 BE_PORT = 18311
 WORK = tempfile.mkdtemp(prefix='drlb_pqc_tests_')
 results = []
+# Signature algorithms for the openssl s_client/s_server peers in the
+# ML-DSA tests. The RHEL 9 DEFAULT crypto policy has none of the ML-DSA
+# algorithms, so a peer that uses the policy cannot verify or sign with
+# ML-DSA at all; DRLB's own default list includes them.
+MLDSA_PEER_SIGALGS = 'mldsa65:ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256'
 
 
 def sh(*args):
@@ -78,6 +83,10 @@ class Backend:
                 '-cert', prefix + 'back.crt', '-key', prefix + 'back.key']
         if groups:
             args += ['-groups', groups]
+        if prefix == 'mldsa_':
+            # The RHEL 9 DEFAULT crypto policy has no ML-DSA signature
+            # algorithms, so the test server lists them itself
+            args += ['-sigalgs', MLDSA_PEER_SIGALGS]
         self.proc = subprocess.Popen(args, cwd=WORK, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                      stdin=subprocess.DEVNULL)
         self.started = wait_port(BE_PORT, self.proc)
@@ -228,10 +237,8 @@ def test_ssl_groups_setting():
 def test_mldsa_frontend():
     b = Bridge('front_mldsa', [], prefix='mldsa_')
     check('bridge starts with an ML-DSA-65 certificate', b.started, b.output()[-300:] if not b.started else '')
-    r = s_client('mldsa_ca.crt', 'X25519MLKEM768')
+    r = s_client('mldsa_ca.crt', 'X25519MLKEM768', ['-sigalgs', MLDSA_PEER_SIGALGS])
     check('frontend ML-DSA-65 certificate verified', r is not None and r[1] == 'mldsa65' and r[2], str(r))
-    r = s_client('mldsa_ca.crt', None, ['-sigalgs', 'mldsa65:ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256'])
-    check('frontend ML-DSA with a mixed client sigalgs list', r is not None and r[1] == 'mldsa65', str(r))
     b.stop()
 
 

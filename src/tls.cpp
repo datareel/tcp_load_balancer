@@ -3,9 +3,15 @@
 // GNU General Public License version 3 or later, see the COPYING file.
 //
 // SSL/TLS with OpenSSL: the frontend server context, the backend client
-// context, and the per connection handshakes. Same settings and
-// defaults as the 1.60 SSL bridge: TLS 1.2 and 1.3 only, ciphers from
-// the system crypto policy, backend certificates verified by default.
+// context, and the per connection handshakes. TLS 1.2 and 1.3 only,
+// ciphers from the system crypto policy, backend certificates verified
+// by default.
+//
+// 2.0.1: OpenSSL 3.5 LTS or later is required at build and run time.
+// Key exchange groups and signature algorithms are set by DRLB with the
+// hybrid post-quantum ML-KEM groups first (X25519MLKEM768), because the
+// RHEL 8 and RHEL 9 crypto policies do not offer ML-KEM. ssl_groups and
+// ssl_sigalgs = system keep the crypto policy lists.
 
 #include "drlb.h"
 
@@ -15,9 +21,19 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/opensslv.h>
 #include <openssl/pem.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
+
+// DRLB is only built and shipped on OpenSSL 3.5 LTS or later: hybrid
+// ML-KEM key exchange and ML-DSA certificates need 3.5, and older lines
+// are out of support. RHEL 8 builds need the RHEL 8.10 OpenSSL 3.5
+// update (or OPENSSL_PREFIX, see the Makefile).
+#if OPENSSL_VERSION_NUMBER < 0x30500000L
+#error "DRLB needs OpenSSL 3.5 or later headers. On RHEL 8 apply the RHEL 8.10 updates that bring OpenSSL 3.5, or build with OPENSSL_PREFIX=<OpenSSL 3.5 install>."
+#endif
 
 namespace drlb {
 
@@ -43,6 +59,64 @@ static int set_ssl_ciphers(SSL_CTX *ctx)
   }
   if(!ssl.ssl_ciphersuites.empty() && SSL_CTX_set_ciphersuites(ctx, ssl.ssl_ciphersuites.c_str()) != 1) {
     nt_print("ERROR - Bad ssl_ciphersuites:", ssl.ssl_ciphersuites.c_str());
+    return 1;
+  }
+  return 0;
+}
+
+// Default key exchange groups, in OpenSSL 3.5 tuple syntax. The first
+// tuple holds the hybrid post-quantum groups, so a server picks one of
+// them whenever the client supports it (with a HelloRetryRequest if the
+// client sent only a classical key share). The "*" groups get a key
+// share in the client hello: X25519MLKEM768 and X25519, so a backend
+// without ML-KEM still completes in one round trip. "?" skips a group
+// the provider does not have (for example in FIPS mode).
+const char *DefaultGroups =
+  "?*X25519MLKEM768:?SecP256r1MLKEM768:?SecP384r1MLKEM1024"
+  "/?*X25519:?secp256r1:?X448:?secp384r1:?secp521r1"
+  "/?ffdhe2048:?ffdhe3072";
+
+// Default signature algorithms: ML-DSA (FIPS 204) first, then the
+// classical algorithms of the RHEL DEFAULT crypto policy. Needed so a
+// server or backend with an ML-DSA certificate works on RHEL 8 and 9.
+const char *DefaultSigalgs =
+  "?mldsa65:?mldsa87:?mldsa44"
+  ":?ecdsa_secp256r1_sha256:?ecdsa_secp384r1_sha384:?ecdsa_secp521r1_sha512"
+  ":?ed25519:?ed448"
+  ":?rsa_pss_pss_sha256:?rsa_pss_pss_sha384:?rsa_pss_pss_sha512"
+  ":?rsa_pss_rsae_sha256:?rsa_pss_rsae_sha384:?rsa_pss_rsae_sha512"
+  ":?rsa_pkcs1_sha256:?rsa_pkcs1_sha384:?rsa_pkcs1_sha512";
+
+// Returns 0 if the running OpenSSL library is 3.5 or later. The headers
+// are checked at build time; this catches an older shared library.
+int check_openssl_version()
+{
+  if(OpenSSL_version_num() < 0x30500000UL) {
+    nt_print("ERROR - DRLB needs OpenSSL 3.5 or later, the library is", OpenSSL_version(OPENSSL_VERSION));
+    nt_print("ERROR - On RHEL 8 apply the RHEL 8.10 updates that bring OpenSSL 3.5");
+    return 1;
+  }
+  return 0;
+}
+
+// Key exchange groups and signature algorithms for one context. Empty
+// settings use the DRLB defaults, except in FIPS mode where the crypto
+// policy lists are kept. "system" keeps the crypto policy lists.
+static int set_groups_sigalgs(SSL_CTX *ctx)
+{
+  const SSLConfig &ssl = cfg.ssl;
+  bool fips = EVP_default_properties_is_fips_enabled(nullptr) == 1;
+  std::string groups = ssl.ssl_groups, sigalgs = ssl.ssl_sigalgs;
+  if(groups.empty()) groups = fips ? "system" : DefaultGroups;
+  if(sigalgs.empty()) sigalgs = fips ? "system" : DefaultSigalgs;
+  if(to_upper(groups) != "SYSTEM" && SSL_CTX_set1_groups_list(ctx, groups.c_str()) != 1) {
+    nt_print("ERROR - Bad ssl_groups:", groups.c_str());
+    nt_print(ssl_error_string());
+    return 1;
+  }
+  if(to_upper(sigalgs) != "SYSTEM" && SSL_CTX_set1_sigalgs_list(ctx, sigalgs.c_str()) != 1) {
+    nt_print("ERROR - Bad ssl_sigalgs:", sigalgs.c_str());
+    nt_print(ssl_error_string());
     return 1;
   }
   return 0;
@@ -98,6 +172,7 @@ int tls_init()
   }
 
   nt_print("OpenSSL version:", OpenSSL_version(OPENSSL_VERSION));
+  if(check_openssl_version() != 0) return 1;
 
   // Only TLS 1.2 and TLS 1.3
   int min_version = 0, max_version = 0;
@@ -109,6 +184,7 @@ int tls_init()
   else if(proto == "TLSV1_2") {
     min_version = max_version = TLS1_2_VERSION;
     nt_print("SSL connections will only use TLS 1.2");
+    nt_print("WARNING - TLS 1.2 has no post-quantum key exchange, use ssl_protocol = TLS or TLSv1_3");
   }
   else if(proto == "TLSV1_3") {
     min_version = max_version = TLS1_3_VERSION;
@@ -145,6 +221,15 @@ int tls_init()
     nt_print("ERROR - Private key does not match the certificate:", ssl.ssl_key_file.c_str());
     return 1;
   }
+  if(EVP_PKEY *pk = SSL_CTX_get0_privatekey(ctx)) {
+    const char *type = EVP_PKEY_get0_type_name(pk);
+    nt_print("Certificate key type:", type ? type : "unknown");
+  }
+  {
+    std::string g = ssl.ssl_groups.empty() ? "default (hybrid ML-KEM first)" : ssl.ssl_groups;
+    if(ssl.ssl_groups.empty() && EVP_default_properties_is_fips_enabled(nullptr) == 1) g = "system (FIPS mode)";
+    nt_print("TLS key exchange groups:", g.c_str());
+  }
   if(!ssl.ssh_ca_list_file.empty() &&
      SSL_CTX_load_verify_locations(ctx, ssl.ssh_ca_list_file.c_str(), nullptr) != 1) {
     nt_print("ERROR - Cannot load the certificate chain:", ssl.ssh_ca_list_file.c_str());
@@ -152,6 +237,7 @@ int tls_init()
     return 1;
   }
   if(set_ssl_ciphers(ctx) != 0) return 1;
+  if(set_groups_sigalgs(ctx) != 0) return 1;
   if(ssl.ssl_use_dhparms) {
     nt_print("Loading Diffie-Hellman parameters");
     if(load_dh_parms(ctx, ssl.ssl_dhparms_file.c_str()) != 0) {
@@ -192,6 +278,7 @@ int tls_init()
       nt_print("WARNING - Backend certificates will not be verified");
     }
     if(set_ssl_ciphers(b) != 0) return 1;
+    if(set_groups_sigalgs(b) != 0) return 1;
     nt_print("Backend connections will use SSL/TLS");
   }
   return 0;
@@ -226,6 +313,11 @@ int tls_accept(ClientSocket *s)
       if(!err.empty()) log_message("[" + std::to_string(s->seq_num) + "]: SSL global exception: " + err);
     }
     return 1;
+  }
+  if(cfg.log_level >= 4) {
+    const char *g = SSL_get0_group_name(s->frontend_ssl);
+    log_message("[" + std::to_string(s->seq_num) + "]: Frontend " + SSL_get_version(s->frontend_ssl) +
+                " " + SSL_get_cipher_name(s->frontend_ssl) + " group " + (g ? g : "none"));
   }
   return 0;
 }
@@ -268,6 +360,11 @@ int tls_connect(ClientSocket *s, const Node *n)
     std::string err = ssl_error_string();
     if(!err.empty()) log_message(seq + err);
     return 1;
+  }
+  if(cfg.log_level >= 4) {
+    const char *g = SSL_get0_group_name(s->backend_ssl);
+    log_message(seq + "Backend " + SSL_get_version(s->backend_ssl) + " " +
+                SSL_get_cipher_name(s->backend_ssl) + " group " + (g ? g : "none"));
   }
   return 0;
 }

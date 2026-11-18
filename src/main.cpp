@@ -62,6 +62,15 @@ int main(int argc, char **argv)
     return 1;
   }
 
+  // The program links libssl and libcrypto even without [SSLCONFIG]
+  {
+    int verbose = cfg.verbose;
+    cfg.verbose = 1; // Errors always go to the console
+    int bad = check_openssl_version();
+    cfg.verbose = verbose;
+    if(bad) return 1;
+  }
+
   if(cfg.check_config) {
     int rv = check_config();
     tls_cleanup();

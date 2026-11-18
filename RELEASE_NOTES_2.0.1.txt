@@ -1,0 +1,65 @@
+DRLB 2.0.1 release notes
+DRLB TCP load balancer, 11/18/2026 (not yet released)
+
+OpenSSL 3.5 on RHEL 8
+---------------------
+* The 2.0 RHEL 8 RPM (drlb_server-2.0-1.el8) was built on the RHEL 8
+  OpenSSL 1.1.1k (it links libssl.so.1.1). DataReel only ships builds on
+  OpenSSL 3.5 LTS or later, so 2.0.1 replaces it. The RHEL 9 and RHEL 10
+  2.0 RPMs were already on OpenSSL 3.5.
+* 2.0.1 is built on OpenSSL 3.5 or later on RHEL 8, 9 and 10:
+  - The build stops on OpenSSL headers older than 3.5 (src/tls.cpp).
+    "make openssl-check" prints the OpenSSL version the build uses.
+  - drlb_server stops at start if the OpenSSL library is older than 3.5.
+  - The RPM requires libssl.so.3(OPENSSL_3.5.0) and
+    libcrypto.so.3(OPENSSL_3.5.0) instead of any openssl-libs.
+  - rpm/make_rpm_package.sh refuses a binary that links libssl.so.1.x
+    and an RPM that does not require the OpenSSL 3.5 libraries.
+  - CMake needs OpenSSL 3.5 (find_package(OpenSSL 3.5 REQUIRED)).
+  - New Makefile option OPENSSL_PREFIX=/path for an OpenSSL 3.5 install
+    that is not the system one (sets -I, -L and a matching rpath).
+* RHEL 8 hosts need RHEL 8.10 with the updates that bring OpenSSL 3.5.
+  On an RHEL 8 host that still has OpenSSL 1.1.1, dnf will not install
+  the 2.0.1 RPM.
+
+Post-quantum TLS
+----------------
+* Key exchange: DRLB now sets the TLS key exchange groups itself, with
+  the hybrid post-quantum ML-KEM groups (FIPS 203) first:
+  X25519MLKEM768, SecP256r1MLKEM768, SecP384r1MLKEM1024, then X25519,
+  secp256r1, X448, secp384r1, secp521r1, ffdhe2048, ffdhe3072. The same
+  list is used on the frontend and on TLS backends. The RHEL 8 and
+  RHEL 9 crypto policies do not offer ML-KEM, so in 2.0 TLS on those
+  releases used classical X25519 only. Classical clients and backends
+  still connect (X25519 or P-256).
+* The server prefers ML-KEM: a client that supports X25519MLKEM768 but
+  sends only an X25519 key share is asked for an ML-KEM key share.
+* Backend connections send X25519MLKEM768 and X25519 key shares, so a
+  backend without ML-KEM still completes in one round trip.
+* Certificates: ML-DSA (FIPS 204) certificates work on the frontend and
+  on backends. The default signature algorithm list is mldsa65,
+  mldsa87, mldsa44 plus the ECDSA, EdDSA, RSA-PSS and RSA PKCS#1
+  algorithms of the RHEL DEFAULT policy. RSA and ECDSA certificates
+  work as before. The log shows the certificate key type at start.
+* New [SSLCONFIG] settings:
+    ssl_groups   key exchange groups (OpenSSL 3.5 list syntax)
+    ssl_sigalgs  signature algorithms
+  Empty (default) uses the DRLB lists above. "system" keeps the system
+  crypto policy lists. In FIPS mode both default to "system". A bad
+  value is a config error.
+* ssl_protocol = TLSv1_2 logs a warning: TLS 1.2 has no post-quantum
+  key exchange. TLS (1.2 and 1.3, the default) and TLSv1_3 are fine.
+* log_level = 4 logs the TLS version, cipher and key exchange group of
+  every frontend and backend connection.
+
+Tests
+-----
+* New tests/pqc_tests.py (part of "make test"): ML-KEM groups on the
+  frontend and backends, ML-KEM preference, classical fallback,
+  ssl_groups and ssl_sigalgs settings, ML-DSA certificates on the
+  frontend and backends, and the OpenSSL 3.5 link.
+
+Unchanged
+---------
+Everything else in 2.0: settings, defaults, config files, the systemd
+units and the drlb user.

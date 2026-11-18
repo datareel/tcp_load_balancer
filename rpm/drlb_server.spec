@@ -1,6 +1,6 @@
 BuildArch: x86_64
 Name: drlb_server
-Version: 2.0
+Version: 2.0.1
 Release: 1%{?dist}
 Summary: DRLB TCP and SSL/TLS load balancer
 Group: System Environment/Daemons
@@ -8,7 +8,11 @@ License: GPL
 Distribution: Datareel Open Source
 URL: https://datareel.com/drlb
 Vendor: Datareel Open Source
-Requires: openssl-libs
+# OpenSSL 3.5 LTS or later on every RHEL version (RHEL 8: RHEL 8.10 with
+# the OpenSSL 3.5 update). The symbol version names the library, not a
+# package, so any OpenSSL 3.5 libssl/libcrypto satisfies it.
+Requires: libssl.so.3(OPENSSL_3.5.0)(64bit)
+Requires: libcrypto.so.3(OPENSSL_3.5.0)(64bit)
 Requires: systemd
 Requires: bash
 Requires(pre): shadow-utils
@@ -44,6 +48,7 @@ tar xf %{drlb_tarball} -C $RPM_BUILD_ROOT
 %config(noreplace) %attr(0644, root, root) "/etc/drlb/ssl_bridge.cfg"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/README.md"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/RELEASE_NOTES_2.0.txt"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/RELEASE_NOTES_2.0.1.txt"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/USER_GUIDE.md"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/COPYING"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/version.txt"
@@ -110,6 +115,15 @@ rm -rf /var/lib/rpm-state/drlb
 exit 0
 
 %changelog
+* Wed Nov 18 2026 Datareel <datareel.com>
+- Version 2.0.1
+- Built and run only on OpenSSL 3.5 LTS or later on RHEL 8, 9 and 10.
+  The 2.0 RHEL 8 RPM was built on OpenSSL 1.1.1k by mistake.
+- Build stops on OpenSSL headers older than 3.5, the program stops at
+  start on an older library, and the RPM requires OpenSSL 3.5 libraries
+- Post-quantum TLS: hybrid ML-KEM key exchange (X25519MLKEM768 first)
+  on the frontend and backends by default, ML-DSA certificates
+- New [SSLCONFIG] settings ssl_groups and ssl_sigalgs
 * Sat Oct 31 2026 Datareel <datareel.com>
 - Version 2.0
 - drlb_server and drlb_ssl_server combined in one program and package

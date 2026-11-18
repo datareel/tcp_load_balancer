@@ -87,6 +87,8 @@ struct SSLConfig {
   std::string ssl_protocol = "TLS";
   std::string ssl_cipher_list;  // TLS 1.2 ciphers, system crypto policy if empty
   std::string ssl_ciphersuites; // TLS 1.3 cipher suites, system crypto policy if empty
+  std::string ssl_groups;  // Key exchange groups, DRLB default (ML-KEM first) if empty, "system" = crypto policy
+  std::string ssl_sigalgs; // Signature algorithms, DRLB default (ML-DSA first) if empty, "system" = crypto policy
 
   SSL_CTX *server_ctx = nullptr; // Frontend
   SSL_CTX *client_ctx = nullptr; // Shared by all backend connections
@@ -291,6 +293,9 @@ int tls_accept(ClientSocket *s);
 int tls_connect(ClientSocket *s, const Node *n);
 void tls_shutdown(ClientSocket *s);
 void close_backend(ClientSocket *s); // Free the backend TLS session and close the socket
+int check_openssl_version(); // 0 if the OpenSSL library is 3.5 or later
+extern const char *DefaultGroups;
+extern const char *DefaultSigalgs;
 
 // relay.cpp
 struct RelaySide {

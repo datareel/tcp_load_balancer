@@ -27,7 +27,18 @@ mkdir -p "${STAGE}" "${TOPDIR}"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 
 cd "${TOP}"
 make clean
+# OpenSSL 3.5 or later only (the build also stops in src/tls.cpp)
+OPENSSL_HDR=$(make -s openssl-check) || {
+    echo "ERROR - OpenSSL 3.5 or later headers are required (openssl-devel)."
+    echo "ERROR - On RHEL 8 apply the RHEL 8.10 updates that bring OpenSSL 3.5."
+    exit 1
+}
+echo "Building with ${OPENSSL_HDR}"
 make
+if ldd drlb_server | grep -q 'libssl.so.1'; then
+    echo "ERROR - drlb_server links an OpenSSL older than 3: $(ldd drlb_server | grep libssl)"
+    exit 1
+fi
 
 # Stage the files in their installed locations
 make install DESTDIR="${STAGE}" PREFIX=/usr
@@ -42,7 +53,7 @@ install -d -m 0755 "${STAGE}/usr/libexec/drlb" "${STAGE}/usr/lib/systemd/system"
 install -m 0755 systemd/drlb_platform_check systemd/drlb_server_ctl "${STAGE}/usr/libexec/drlb/"
 install -m 0644 systemd/drlb_server.service systemd/drlb_server@.service \
     systemd/drlb_ssl_server.service "${STAGE}/usr/lib/systemd/system/"
-install -m 0644 README.md RELEASE_NOTES_2.0.txt COPYING version.txt etc/example_config.cfg \
+install -m 0644 README.md RELEASE_NOTES_2.0.txt RELEASE_NOTES_2.0.1.txt COPYING version.txt etc/example_config.cfg \
     docs/USER_GUIDE.md "${STAGE}/usr/share/doc/drlb/"
 gzip -9 -n -c man/drlb_server.8 > "${STAGE}/usr/share/man/man8/drlb_server.8.gz"
 gzip -9 -n -c man/drlb_ssl_server.8 > "${STAGE}/usr/share/man/man8/drlb_ssl_server.8.gz"
@@ -53,6 +64,15 @@ cp "${HERE}/drlb_server.spec" "${TOPDIR}/SPECS/"
 rpmbuild -bb --define "_topdir ${TOPDIR}" --define "dist ${DIST}" \
     --define "drlb_tarball ${TOPDIR}/BUILD/drlb_server.tar.gz" \
     --buildroot "${TOPDIR}/BUILDROOT" "${TOPDIR}/SPECS/drlb_server.spec"
+
+# The package must require OpenSSL 3.5 libraries and nothing older
+RPM=$(ls "${TOPDIR}"/RPMS/x86_64/drlb_server-*.rpm)
+if rpm -qpR "${RPM}" | grep -q 'libssl.so.1' || ! rpm -qpR "${RPM}" | grep -q 'libssl.so.3(OPENSSL_3.5.0)'; then
+    echo "ERROR - ${RPM} does not require OpenSSL 3.5:"
+    rpm -qpR "${RPM}" | grep -E 'ssl|crypto'
+    exit 1
+fi
+echo "OpenSSL in ${RPM##*/}: ${OPENSSL_HDR}, $(ldd drlb_server | grep -oE 'libssl[^ ]*' | head -1)"
 
 mkdir -p "${HOME}/rpmbuild/RPMS/x86_64"
 cp -v "${TOPDIR}"/RPMS/x86_64/drlb_server-*.rpm "${HOME}/rpmbuild/RPMS/x86_64/"

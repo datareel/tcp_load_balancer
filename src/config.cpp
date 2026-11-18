@@ -17,7 +17,7 @@
 
 namespace drlb {
 
-const char *VersionString = "2.0";
+const char *VersionString = "2.0.1";
 const char *ProgramDescription = "DRLB TCP Load Balancer";
 const char *ProducedBy = "http://datareel.com";
 
@@ -379,6 +379,17 @@ static const char *default_config =
   "# Set these only to restrict them further for this server.\n"
   "##ssl_cipher_list = ECDHE+AESGCM:ECDHE+CHACHA20\n"
   "##ssl_ciphersuites = TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256\n"
+  "# Key exchange groups (TLS 1.3). The default puts the hybrid\n"
+  "# post-quantum ML-KEM groups first: X25519MLKEM768, SecP256r1MLKEM768,\n"
+  "# SecP384r1MLKEM1024, then X25519, P-256, X448, P-384, P-521 and\n"
+  "# ffdhe2048/3072. system = use the crypto policy list (the default in\n"
+  "# FIPS mode). Uses OpenSSL 3.5 group list syntax.\n"
+  "##ssl_groups = X25519MLKEM768:X25519:secp256r1\n"
+  "# Signature algorithms. The default adds ML-DSA (mldsa65, mldsa87,\n"
+  "# mldsa44) to the ECDSA, EdDSA and RSA algorithms, so ML-DSA\n"
+  "# certificates work on the frontend and the backends.\n"
+  "# system = use the crypto policy list.\n"
+  "##ssl_sigalgs = system\n"
   "# Seconds allowed for a TLS handshake\n"
   "##ssl_handshake_timeout_secs = 30\n"
   "# Private key and certificate files\n"
@@ -683,6 +694,8 @@ static int set_sslconfig(const std::string &name, const std::string &value)
   }
   else if(name == "ssl_cipher_list") ssl.ssl_cipher_list = value;
   else if(name == "ssl_ciphersuites") ssl.ssl_ciphersuites = value;
+  else if(name == "ssl_groups") ssl.ssl_groups = value;
+  else if(name == "ssl_sigalgs") ssl.ssl_sigalgs = value;
   else if(name == "ssl_protocol") ssl.ssl_protocol = value;
   else nt_print("WARNING - Unknown [SSLCONFIG] setting ignored:", name.c_str());
   return 0;

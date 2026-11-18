@@ -1,6 +1,6 @@
-# DRLB TCP load balancer 2.0 user guide
+# DRLB TCP load balancer 2.0.1 user guide
 
-DataReel load balancer (DRLB) 2.0, `drlb_server`.
+DataReel load balancer (DRLB) 2.0.1, `drlb_server`.
 Copyright (c) 2016-2026 DataReel Software Development.
 Online docs: http://datareel.com/info_drlb.html
 
@@ -134,9 +134,18 @@ The RPM is copied to `~/rpmbuild/RPMS/x86_64`. Install it:
 
 | Release | Command |
 |---|---|
-| RHEL 10 | `sudo dnf -y install ~/rpmbuild/RPMS/x86_64/drlb_server-2.0-1.el10.x86_64.rpm` |
-| RHEL 9 | `sudo dnf -y install ~/rpmbuild/RPMS/x86_64/drlb_server-2.0-1.el9.x86_64.rpm` |
-| RHEL 8 | `sudo dnf -y install ~/rpmbuild/RPMS/x86_64/drlb_server-2.0-1.el8.x86_64.rpm` |
+| RHEL 10 | `sudo dnf -y install ~/rpmbuild/RPMS/x86_64/drlb_server-2.0.1-1.el10.x86_64.rpm` |
+| RHEL 9 | `sudo dnf -y install ~/rpmbuild/RPMS/x86_64/drlb_server-2.0.1-1.el9.x86_64.rpm` |
+| RHEL 8 | `sudo dnf -y install ~/rpmbuild/RPMS/x86_64/drlb_server-2.0.1-1.el8.x86_64.rpm` |
+
+OpenSSL 3.5 or later is required on every release. RHEL 9 and RHEL 10
+ship it; RHEL 8 needs RHEL 8.10 with the updates that bring OpenSSL 3.5.
+The build stops on older OpenSSL headers, `make_rpm_package.sh` refuses
+a binary or RPM that is not on OpenSSL 3.5, the RPM requires the
+OpenSSL 3.5 libraries, and `drlb_server` stops at start on an older
+library. `make openssl-check` prints the OpenSSL version the build uses.
+`make OPENSSL_PREFIX=/path` builds against an OpenSSL 3.5 install that
+is not the system one.
 
 `make_rpm_package.sh` takes an optional second argument, the scratch
 build directory (default `/tmp/drlb_build_<user>`).
@@ -687,6 +696,8 @@ The section turns on SSL mode. All settings are optional.
 | `ssl_dhparms_file` | `/etc/drlb/ssl/certs/dhparams.pem` | DH parameters, PEM |
 | `ssl_cipher_list` | system policy | TLS 1.2 cipher list (OpenSSL format) |
 | `ssl_ciphersuites` | system policy | TLS 1.3 cipher suites |
+| `ssl_groups` | DRLB default, hybrid ML-KEM first | Key exchange groups, `system` = crypto policy (see Post-quantum key exchange) |
+| `ssl_sigalgs` | DRLB default, ML-DSA added | Signature algorithms, `system` = crypto policy |
 | `ssl_handshake_timeout_secs` | `30` | Seconds allowed for a TLS handshake, more than 0 |
 | `ssl_encrypt_backend` | `0` | Use TLS to connect to the back end nodes |
 | `ssl_verify_backend_cert` | `1` | Verify back end certificates |
@@ -1252,6 +1263,8 @@ ssl_cert_file = /etc/drlb/ssl/certs/server.crt
 ssl_handshake_timeout_secs = 30
 ##ssl_cipher_list = ECDHE+AESGCM:ECDHE+CHACHA20
 ##ssl_ciphersuites = TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256
+##ssl_groups = X25519MLKEM768:X25519:secp256r1
+##ssl_sigalgs = system
 ##ssl_use_dhparms = 0
 ##ssl_dhparms_file = /etc/drlb/ssl/certs/dhparams.pem
 ##ssl_encrypt_backend = 0
@@ -1353,6 +1366,43 @@ Ciphers follow the system crypto policy, set with
 cipher list format) and `ssl_ciphersuites` (TLS 1.3) only to restrict
 them further for this server. A bad value is a config error. The same
 settings apply to back end TLS.
+
+### Post-quantum key exchange and certificates
+
+DRLB 2.0.1 needs OpenSSL 3.5 or later and uses the hybrid post-quantum
+key exchange groups by default, on the front end and the back end:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `ssl_groups` | DRLB default | Key exchange groups in OpenSSL 3.5 list syntax. `system` uses the crypto policy list. |
+| `ssl_sigalgs` | DRLB default | Signature algorithms. `system` uses the crypto policy list. |
+
+The default group list is `X25519MLKEM768`, `SecP256r1MLKEM768` and
+`SecP384r1MLKEM1024` (hybrid ML-KEM, FIPS 203), then `X25519`,
+`secp256r1`, `X448`, `secp384r1`, `secp521r1`, `ffdhe2048` and
+`ffdhe3072`. The server picks a hybrid ML-KEM group whenever the client
+supports one, and classical clients still connect with X25519 or P-256.
+DRLB sets the list itself because the RHEL 8 and RHEL 9 crypto policies
+do not offer ML-KEM (RHEL 10 does).
+
+The default signature algorithm list adds ML-DSA (FIPS 204: `mldsa65`,
+`mldsa87`, `mldsa44`) to the ECDSA, EdDSA, RSA-PSS and RSA PKCS#1
+algorithms of the RHEL DEFAULT policy, so an ML-DSA certificate works on
+the front end and on back ends. RSA and ECDSA certificates work as
+before; no key type is required.
+
+In FIPS mode both settings default to `system`, so the FIPS crypto
+policy decides. Post-quantum key exchange needs TLS 1.3: with
+`ssl_protocol = TLSv1_2` the server logs a warning. At `log_level = 4`
+each connection logs the TLS version, cipher and group, for example
+`Frontend TLSv1.3 TLS_AES_256_GCM_SHA384 group X25519MLKEM768`.
+
+Check a server with OpenSSL 3.5:
+
+```
+openssl s_client -connect lb.example.com:443 -groups X25519MLKEM768 -brief </dev/null
+# Negotiated TLS1.3 group: X25519MLKEM768
+```
 
 ### Back end TLS
 

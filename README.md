@@ -1,4 +1,4 @@
-# DRLB TCP load balancer 2.0
+# DRLB TCP load balancer 2.0.1
 
 `drlb_server` is a TCP load balancer for Linux. It accepts connections on
 one port and relays each one to a backend node chosen by round robin,
@@ -37,10 +37,12 @@ and firewalld (and rebuilds such as Rocky Linux and AlmaLinux).
 
 ## Building
 
-RHEL 8, RHEL 9 or RHEL 10:
+RHEL 8, RHEL 9 or RHEL 10 with OpenSSL 3.5 or later (RHEL 8: RHEL 8.10
+with the OpenSSL 3.5 updates). Older OpenSSL headers stop the build:
 
 ```
 sudo dnf -y install gcc-c++ make openssl-devel
+make openssl-check           # prints the OpenSSL version, fails below 3.5
 make
 ./drlb_server --version
 ```
@@ -51,12 +53,13 @@ CMake also works: `cmake -S . -B build-cmake && cmake --build build-cmake`.
 ## RPM
 
 Build the RPM on the RHEL version it is for (also needs `rpm-build`).
-The RPM is `drlb_server-2.0-1.el8`, `.el9` or `.el10`:
+The RPM is `drlb_server-2.0.1-1.el8`, `.el9` or `.el10` and requires the
+OpenSSL 3.5 libraries:
 
 ```
 cd rpm
 ./make_rpm_package.sh rhel10      # or rhel9, rhel8
-sudo dnf -y install ~/rpmbuild/RPMS/x86_64/drlb_server-2.0-*.el10.x86_64.rpm
+sudo dnf -y install ~/rpmbuild/RPMS/x86_64/drlb_server-2.0.1-*.el10.x86_64.rpm
 ```
 
 ## Running
@@ -92,6 +95,12 @@ ssl_handshake_timeout_secs = 30
 
 Ciphers follow the system crypto policy unless `ssl_cipher_list` or
 `ssl_ciphersuites` restrict them.
+
+Post-quantum: key exchange uses hybrid ML-KEM first (`X25519MLKEM768`,
+then classical X25519 and P-256 for older clients) on the frontend and
+the backends, and ML-DSA certificates work. `ssl_groups` and
+`ssl_sigalgs` change the lists; `system` keeps the crypto policy lists
+(the default in FIPS mode). See the user guide.
 
 ## Tests
 

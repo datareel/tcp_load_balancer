@@ -28,7 +28,8 @@ Config &cfg = *new Config;
 void version_message()
 {
   std::cout << "\n" << ProgramDescription << " version " << VersionString << "\n"
-            << "Produced by: " << ProducedBy << "\n\n" << std::flush;
+            << "Produced by: " << ProducedBy << "\n"
+            << openssl_build_info() << "\n\n" << std::flush;
 }
 
 void help_message()

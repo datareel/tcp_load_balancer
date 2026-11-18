@@ -8,11 +8,19 @@ License: GPL
 Distribution: Datareel Open Source
 URL: https://datareel.com/drlb
 Vendor: Datareel Open Source
-# OpenSSL 3.5 LTS or later on every RHEL version (RHEL 8: the EPEL
-# openssl3-libs package). The symbol version names the library, not a
-# package, so any OpenSSL 3.5 libssl/libcrypto satisfies it.
+# OpenSSL per package (make_rpm_package.sh defines drlb_openssl):
+#   system35  RHEL 9/10: OpenSSL 3.5 LTS or later. The symbol version
+#             names the library, not a package.
+#   fips      RHEL 8 drlb_server: the system OpenSSL 1.1.1 (FIPS build)
+#   static35  RHEL 8 drlb_server-openssl35: OpenSSL 3.5 built in, no
+#             OpenSSL package needed
+%if "%{?drlb_openssl}" == "system35"
 Requires: libssl.so.3(OPENSSL_3.5.0)(64bit)
 Requires: libcrypto.so.3(OPENSSL_3.5.0)(64bit)
+%endif
+%if "%{?drlb_openssl}" == "fips"
+Requires: openssl-libs
+%endif
 Requires: systemd
 Requires: bash
 Requires(pre): shadow-utils
@@ -81,15 +89,19 @@ exit 0
 
 %post -p /bin/sh
 
+# The other RHEL 8 build (drlb_server / drlb_server-openssl35) installed in
+# the same transaction is a "dnf swap": leave the services as they are
+drlb_other_build() { rpm -q drlb_server drlb_server-openssl35 2>/dev/null | grep -v -e 'not installed' -e "^%{name}-%{version}-%{release}" | grep -q . ; }
 if [ $1 -eq 1 ] ; then
     # Initial installation
-    systemctl preset drlb_server.service drlb_ssl_server.service >/dev/null 2>&1 || :
+    drlb_other_build || systemctl preset drlb_server.service drlb_ssl_server.service >/dev/null 2>&1 || :
 fi
 
 %preun -p /bin/sh
 
-if [ $1 -eq 0 ] ; then
-    # Package removal, not upgrade
+drlb_other_build() { rpm -q drlb_server drlb_server-openssl35 2>/dev/null | grep -v -e 'not installed' -e "^%{name}-%{version}-%{release}" | grep -q . ; }
+if [ $1 -eq 0 ] && ! drlb_other_build ; then
+    # Package removal, not upgrade or a swap to the other RHEL 8 build
     systemctl --no-reload disable drlb_server.service drlb_ssl_server.service > /dev/null 2>&1 || :
     systemctl stop drlb_server.service drlb_ssl_server.service > /dev/null 2>&1 || :
 fi

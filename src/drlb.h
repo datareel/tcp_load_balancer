@@ -293,7 +293,10 @@ int tls_accept(ClientSocket *s);
 int tls_connect(ClientSocket *s, const Node *n);
 void tls_shutdown(ClientSocket *s);
 void close_backend(ClientSocket *s); // Free the backend TLS session and close the socket
-int check_openssl_version(); // 0 if the OpenSSL library is 3.5 or later
+int check_openssl_version(); // 0 if the OpenSSL library is new enough (3.5, or 1.1.1 for the FIPS build)
+bool fips_mode();
+bool pqc_build();
+std::string openssl_build_info();
 extern const char *DefaultGroups;
 extern const char *DefaultSigalgs;
 

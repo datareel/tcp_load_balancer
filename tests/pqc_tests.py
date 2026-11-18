@@ -7,6 +7,10 @@
 # "openssl s_server" as TLS backends, because they report the negotiated
 # group.
 #
+# With a FIPS build (RHEL 8 drlb_server on the system OpenSSL 1.1.1) only
+# the FIPS checks run: classic groups work, ML-KEM is refused, ssl_groups
+# and ssl_sigalgs are ignored with a warning.
+#
 # Usage: python3 tests/pqc_tests.py [path to drlb_server or drlb_ssl_server]
 # Needs Python 3, the OpenSSL 3.5 openssl command and the server.
 # Uses ports 18300-18399.
@@ -28,6 +32,7 @@ LB_PORT = 18300
 BE_PORT = 18311
 WORK = tempfile.mkdtemp(prefix='drlb_pqc_tests_')
 results = []
+FIPS_BUILD = False  # Set in main() from the server's --version
 # Signature algorithms for the openssl s_client/s_server peers in the
 # ML-DSA tests. The RHEL 9 DEFAULT crypto policy has none of the ML-DSA
 # algorithms, so a peer that uses the policy cannot verify or sign with
@@ -179,13 +184,64 @@ def check(name, ok, detail=''):
     print('%-4s %s %s' % ('PASS' if ok else 'FAIL', name, detail))
 
 
-def test_openssl_version():
+def linked_with():
+    out = subprocess.run([SERVER, '--version'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.decode()
+    for line in out.splitlines():
+        if line.startswith('Linked with:'):
+            return line
+    return ''
 
+
+def test_openssl_version():
+    linked = linked_with()
     ldd = subprocess.run(['ldd', SERVER], stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.decode()
-    check('server links libssl.so.3 (not 1.1)', 'libssl.so.3' in ldd and 'libssl.so.1.1' not in ldd)
+    if FIPS_BUILD:
+        if 'OpenSSL 1.' in linked:
+            check('FIPS build links the system libssl.so.1.1', 'libssl.so.1.1' in ldd, linked)
+        else:
+            check('FIPS build links the system shared libssl', 'libssl.so' in ldd, linked)
+    elif ', static, ' in linked:
+        check('static build links no shared libssl/libcrypto', 'libssl' not in ldd and 'libcrypto' not in ldd, linked)
+        check('static build is OpenSSL 3.5', 'OpenSSL 3.5.' in linked, linked)
+    else:
+        check('server links libssl.so.3 (not 1.1)', 'libssl.so.3' in ldd and 'libssl.so.1.1' not in ldd, linked)
     lib = subprocess.run(['openssl', 'version'], stdout=subprocess.PIPE).stdout.decode().split()
     ok = len(lib) > 1 and tuple(int(x) for x in lib[1].split('-')[0].split('.')[:2]) >= (3, 5)
     check('openssl command is 3.5 or later', ok, ' '.join(lib[:2]))
+
+
+def test_fips_build():
+    """The RHEL 8 FIPS build (system OpenSSL 1.1.1): no post-quantum TLS,
+    the crypto policy decides, ssl_groups/ssl_sigalgs are ignored"""
+    b = Bridge('fips_default', ['ssl_protocol = TLS'])
+    out = b.output()
+    check('FIPS build starts with the default settings', b.started)
+    check('FIPS build logs that post-quantum TLS is not available',
+          'post-quantum TLS (ML-KEM key exchange, ML-DSA certificates) is not available' in out)
+    r = s_client('rsa_ca.crt', 'X25519')
+    check('FIPS build: X25519 client works', r is not None and r[0] == 'X25519', str(r))
+    r = s_client('rsa_ca.crt', 'secp256r1')
+    check('FIPS build: P-256 client works', r is not None and r[0] == 'secp256r1', str(r))
+    old = 'OpenSSL 1.' in linked_with()  # RHEL 8: no ML-KEM at all; else the crypto policy decides
+    r = s_client('rsa_ca.crt', 'X25519MLKEM768')
+    if old:
+        check('FIPS build: ML-KEM only client is refused (no ML-KEM in 1.1.1)', r is None, str(r))
+    r = s_client('rsa_ca.crt', 'X25519MLKEM768:X25519')
+    check('FIPS build: ML-KEM capable client connects', r is not None and (r[0] == 'X25519' or not old), str(r))
+    b.stop()
+    b = Bridge('fips_groups', ['ssl_groups = X25519MLKEM768', 'ssl_sigalgs = mldsa65'])
+    r = s_client('rsa_ca.crt', 'X25519')
+    check('FIPS build: ssl_groups/ssl_sigalgs with PQ names do not stop the server',
+          b.started and r is not None, str(r))
+    check('FIPS build: ssl_groups/ssl_sigalgs ignored warning', 'ignored in the FIPS build' in b.output())
+    b.stop()
+    b = Bridge('fips_tls12', ['ssl_protocol = TLSv1_2'])
+    check('FIPS build: ssl_protocol = TLSv1_2 starts without the PQ warning',
+          b.started and 'no post-quantum key exchange' not in b.output())
+    b.stop()
+    backend_case('X25519 only, FIPS build', 'rsa_', 'X25519', [], True)
+    if old:
+        backend_case('ML-KEM only, FIPS build', 'rsa_', 'X25519MLKEM768', [], False)
 
 
 def test_frontend_groups():
@@ -269,9 +325,15 @@ def main():
     if not os.access(SERVER, os.X_OK):
         print('Server binary not found: %s' % SERVER)
         return 2
+    global FIPS_BUILD
+    FIPS_BUILD = 'FIPS build' in linked_with()
     make_certs()
-    for t in (test_openssl_version, test_frontend_groups, test_ssl_groups_setting, test_mldsa_frontend,
-              test_backends):
+    tests = (test_openssl_version, test_frontend_groups, test_ssl_groups_setting, test_mldsa_frontend,
+             test_backends)
+    if FIPS_BUILD:
+        print('FIPS build (system OpenSSL, no post-quantum TLS): running the FIPS checks only')
+        tests = (test_openssl_version, test_fips_build)
+    for t in tests:
         try:
             t()
         except Exception as e:

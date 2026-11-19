@@ -69,7 +69,8 @@ def make_certs():
     make_ca('rsa_', 'rsa:2048')
     make_ca('mldsa_', 'mldsa65')
     make_ca('ec_', 'ec')
-    for p, alg in (('rsa_', 'rsa:2048'), ('mldsa_', 'mldsa65'), ('ec_', 'ec')):
+    make_ca('rsa1024_', 'rsa:1024')
+    for p, alg in (('rsa_', 'rsa:2048'), ('mldsa_', 'mldsa65'), ('ec_', 'ec'), ('rsa1024_', 'rsa:1024')):
         make_leaf(p, 'front', alg, 'DNS:localhost,IP:127.0.0.1')
         make_leaf(p, 'back', alg, 'DNS:backend.test,IP:127.0.0.1')
 
@@ -323,7 +324,7 @@ def test_crypto_policy():
     linked = linked_with()
     if ', static, ' not in linked or 'FIPS mode on' in linked:
         return
-    weak = ['-tls1_2', '-cipher', 'DES-CBC3-SHA:@SECLEVEL=0']
+    weak = ['-tls1_2', '-cipher', 'DES-CBC3-SHA:@SECLEVEL=0']  # OpenSSL 3.5 has no 3DES TLS suites at all
     # DEFAULT: ML-KEM first still, 3DES refused, TLS 1.2 AES-128 allowed
     b = Bridge('policy_default', ['ssl_crypto_policy_file = %s' % policy_file('DEFAULT')])
     out = b.output()
@@ -335,10 +336,17 @@ def test_crypto_policy():
     r = s_client('rsa_ca.crt', 'secp256r1', ['-tls1_2', '-cipher', 'ECDHE-RSA-AES128-GCM-SHA256'])
     check('DEFAULT policy: TLS 1.2 AES-128-GCM allowed', r is not None, str(r))
     b.stop()
-    # LEGACY: 3DES allowed by the policy, but DRLB's TLS 1.2 minimum stays
+    # The security level of the policy: SECLEVEL 2 (DEFAULT) refuses an RSA-1024
+    # certificate, SECLEVEL 1 (LEGACY) accepts it
+    b = Bridge('policy_default_rsa1024', ['ssl_crypto_policy_file = %s' % policy_file('DEFAULT')], prefix='rsa1024_')
+    check('DEFAULT policy: RSA-1024 certificate refused at start (SECLEVEL 2)', not b.started, b.output()[-200:])
+    b.stop()
+    b = Bridge('policy_legacy_rsa1024', ['ssl_crypto_policy_file = %s' % policy_file('LEGACY')], prefix='rsa1024_')
+    r = s_client('rsa1024_ca.crt', 'secp256r1', ['-cipher', 'DEFAULT:@SECLEVEL=1'])
+    check('LEGACY policy: RSA-1024 certificate accepted (SECLEVEL 1)', b.started and r is not None, str(r))
+    b.stop()
+    # LEGACY allows TLS 1.0, but DRLB's TLS 1.2 minimum stays
     b = Bridge('policy_legacy', ['ssl_crypto_policy_file = %s' % policy_file('LEGACY')])
-    r = s_client('rsa_ca.crt', 'secp256r1', weak)
-    check('LEGACY policy: 3DES allowed (the policy decides)', b.started and r is not None, str(r))
     r = s_client('rsa_ca.crt', None, ['-tls1_1', '-cipher', 'ALL:@SECLEVEL=0'])
     check('LEGACY policy: TLS 1.1 still refused (DRLB minimum TLS 1.2)', r is None, str(r))
     r = s_client('rsa_ca.crt', 'X25519MLKEM768')

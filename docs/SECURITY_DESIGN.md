@@ -212,8 +212,10 @@ packages, the same model as the DataReel cluster manager (DRCM 1.49):
   ML-KEM groups stay on top. A missing or bad policy file stops the
   server (`ssl_crypto_policy_file = none` runs without it). Tested with
   the RHEL 8 DEFAULT, FUTURE (SECLEVEL 3 refuses an RSA-2048 certificate,
-  AES-128 is refused) and LEGACY (3DES allowed for TLS 1.2, TLS 1.1 still
-  refused) policies and a TLS 1.3-only custom policy.
+  AES-128 is refused) and LEGACY (SECLEVEL 1 accepts an RSA-1024
+  certificate that DEFAULT refuses; TLS 1.1 is still refused) policies
+  and a TLS 1.3-only custom policy. OpenSSL 3.5 has no 3DES TLS suites,
+  so the static build never offers 3DES, whatever the policy.
 - **The FIPS build** has no post-quantum TLS. It says so in the log at
   start, and `ssl_groups`/`ssl_sigalgs` are ignored there with a warning,
   so the FIPS crypto policy decides. Use the DEFAULT or FIPS crypto

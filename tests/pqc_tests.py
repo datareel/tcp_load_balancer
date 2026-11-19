@@ -201,7 +201,11 @@ def linked_with():
 def test_openssl_version():
     linked = linked_with()
     ldd = subprocess.run(['ldd', SERVER], stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.decode()
-    if FIPS_BUILD:
+    linked = linked_with()
+    if ', static, ' in linked and 'FIPS mode on' in linked:
+        print('Static OpenSSL build on a FIPS mode host: it must refuse to run; checking that only')
+        tests = (test_openssl_version, test_static_on_fips_host)
+    elif FIPS_BUILD:
         if 'OpenSSL 1.' in linked:
             check('FIPS build links the system libssl.so.1.1', 'libssl.so.1.1' in ldd, linked)
         else:

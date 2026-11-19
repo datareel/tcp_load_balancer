@@ -121,6 +121,14 @@ int check_openssl_version()
 #endif
     return 1;
   }
+  // The static OpenSSL 3.5 build (RHEL 8 drlb_server-openssl35) is not a
+  // validated FIPS module: it does not run on a host in FIPS mode
+  if(std::string(DRLB_OPENSSL_FLAVOR) == "static" && fips_mode()) {
+    nt_print("ERROR - This host is in FIPS mode, and this program's built-in OpenSSL is not FIPS validated");
+    nt_print("ERROR - On a FIPS mode host install the drlb_server package (FIPS build on the system OpenSSL):");
+    nt_print("ERROR -   dnf swap drlb_server-openssl35 ./drlb_server-<version>-1.el8.x86_64.rpm");
+    return 1;
+  }
   return 0;
 }
 
@@ -193,8 +201,74 @@ static int set_groups_sigalgs(SSL_CTX *ctx)
 #endif
 }
 
+// The static OpenSSL 3.5 of the RHEL 8 drlb_server-openssl35 package does
+// not read /etc/pki/tls/openssl.cnf, so DRLB applies the RHEL system crypto
+// policy itself: the OpenSSL back end of the active policy
+// (ssl_crypto_policy_file, default
+// /etc/crypto-policies/back-ends/opensslcnf.config) is read and each
+// "Name = Value" line is applied to the TLS context with SSL_CONF_cmd(),
+// as the system OpenSSL does. TLS.MinProtocol and TLS.MaxProtocol are
+// applied as MinProtocol and MaxProtocol; DTLS lines are skipped. DRLB's
+// TLS 1.2 minimum and the ssl_* settings apply after the policy, and the
+// RHEL 8 policy files have no group list, so DRLB's groups stay on top.
+// Builds on the system OpenSSL get the policy from OpenSSL itself.
+static int apply_crypto_policy(SSL_CTX *ctx, bool server)
+{
+  if(std::string(DRLB_OPENSSL_FLAVOR) != "static") return 0;
+  const std::string &fname = cfg.ssl.ssl_crypto_policy_file;
+  if(fname.empty() || to_upper(fname) == "NONE") return 0;
+  FILE *fp = fopen(fname.c_str(), "r");
+  if(!fp) {
+    nt_print("ERROR - Cannot read the system crypto policy:", fname.c_str());
+    nt_print("ERROR - Set ssl_crypto_policy_file = none to run without it");
+    return 1;
+  }
+  SSL_CONF_CTX *cctx = SSL_CONF_CTX_new();
+  if(!cctx) { fclose(fp); return 1; }
+  SSL_CONF_CTX_set_flags(cctx, SSL_CONF_FLAG_FILE | SSL_CONF_FLAG_SHOW_ERRORS |
+                         (server ? SSL_CONF_FLAG_SERVER : SSL_CONF_FLAG_CLIENT));
+  SSL_CONF_CTX_set_ssl_ctx(cctx, ctx);
+  int errors = 0, applied = 0;
+  char line[4096];
+  while(fgets(line, sizeof(line), fp)) {
+    std::string l(line);
+    size_t c = l.find('#');
+    if(c != std::string::npos) l.erase(c);
+    size_t eq = l.find('=');
+    if(eq == std::string::npos) continue;
+    std::string name = l.substr(0, eq), value = l.substr(eq + 1);
+    auto trim = [](std::string &s) {
+      size_t b = s.find_first_not_of(" \t\r\n"), e = s.find_last_not_of(" \t\r\n");
+      s = (b == std::string::npos) ? "" : s.substr(b, e - b + 1);
+    };
+    trim(name); trim(value);
+    if(name.empty() || value.empty() || name.compare(0, 5, "DTLS.") == 0) continue;
+    if(name.compare(0, 4, "TLS.") == 0) name.erase(0, 4);
+    ERR_clear_error();
+    int rv = SSL_CONF_cmd(cctx, name.c_str(), value.c_str());
+    if(rv == 2 || rv == 1) { applied++; continue; }
+    if(rv == -2) {
+      nt_print("WARNING - Crypto policy setting not known to this OpenSSL, skipped:", name.c_str());
+      continue;
+    }
+    nt_print("ERROR - Bad crypto policy setting in " + fname + ": " + name + " = " + value);
+    std::string e = ssl_error_string();
+    if(!e.empty()) nt_print(e);
+    errors++;
+  }
+  fclose(fp);
+  SSL_CONF_CTX_finish(cctx);
+  SSL_CONF_CTX_free(cctx);
+  if(errors) return 1;
+  if(server) nt_print("System crypto policy applied (" + std::to_string(applied) + " settings): " + fname);
+  return 0;
+}
+
 static int set_protocol(SSL_CTX *ctx, int min_version, int max_version)
 {
+  // The crypto policy may only make the minimum stricter than DRLB's
+  int policy_min = SSL_CTX_get_min_proto_version(ctx);
+  if(policy_min > min_version && (!max_version || policy_min <= max_version)) min_version = policy_min;
   if(SSL_CTX_set_min_proto_version(ctx, min_version) != 1) return 1;
   if(max_version && SSL_CTX_set_max_proto_version(ctx, max_version) != 1) return 1;
   SSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY);
@@ -269,6 +343,10 @@ int tls_init()
 
   // Frontend server context
   SSL_CTX *ctx = SSL_CTX_new(TLS_server_method());
+  if(ctx && apply_crypto_policy(ctx, true) != 0) {
+    SSL_CTX_free(ctx);
+    return 1;
+  }
   if(!ctx || set_protocol(ctx, min_version, max_version) != 0) {
     nt_print("ERROR - Cannot initialize the SSL server context");
     if(ctx) SSL_CTX_free(ctx);
@@ -299,10 +377,6 @@ int tls_init()
     const char *type = OBJ_nid2sn(EVP_PKEY_base_id(pk));
 #endif
     nt_print("Certificate key type:", type ? type : "unknown");
-  }
-  if(fips_mode() && std::string(DRLB_OPENSSL_FLAVOR) == "static") {
-    nt_print("WARNING - FIPS mode is on, but this program's built-in OpenSSL is not FIPS validated");
-    nt_print("WARNING - On a FIPS mode host use the drlb_server package (FIPS build on the system OpenSSL)");
   }
   if(!pqc_build()) {
     nt_print("INFO - FIPS build: post-quantum TLS (ML-KEM key exchange, ML-DSA certificates) is not available");
@@ -342,6 +416,10 @@ int tls_init()
   // Backend client context, shared by all backend connections
   if(ssl.ssl_encrypt_backend) {
     SSL_CTX *b = SSL_CTX_new(TLS_client_method());
+    if(b && apply_crypto_policy(b, false) != 0) {
+      SSL_CTX_free(b);
+      return 1;
+    }
     if(!b || set_protocol(b, min_version, max_version) != 0) {
       nt_print("ERROR - Cannot initialize the backend SSL context");
       if(b) SSL_CTX_free(b);

@@ -183,11 +183,20 @@ Notes on the RHEL 8 packages:
   warning there: the system crypto policy decides. On a host with the
   LEGACY crypto policy that includes 3DES for TLS 1.2; use the DEFAULT
   or FIPS policy.
-- The static OpenSSL 3.5 does not read the system crypto policy (its
-  config path, `/opt/openssl-3.5/ssl`, is not installed), so DRLB's own
-  defaults apply: TLS 1.2 minimum, OpenSSL 3.5 default ciphers, hybrid
-  ML-KEM groups first. It is not FIPS validated; use `drlb_server` in
-  FIPS mode.
+- The static OpenSSL 3.5 does not read `/etc/pki/tls/openssl.cnf`, so
+  `drlb_server-openssl35` applies the system crypto policy itself: at
+  start it reads `ssl_crypto_policy_file` (default
+  `/etc/crypto-policies/back-ends/opensslcnf.config`, the OpenSSL back
+  end of the active policy) and applies its `CipherString`,
+  `Ciphersuites`, `MinProtocol`/`MaxProtocol` and `SignatureAlgorithms`
+  lines, as the system OpenSSL does. Restart DRLB after
+  `update-crypto-policies --set`. The policy can only make the protocol
+  range stricter than DRLB's TLS 1.2 minimum, the `ssl_*` settings apply
+  after it, and DRLB's hybrid ML-KEM groups stay on top. A missing or bad
+  policy file stops the server; `ssl_crypto_policy_file = none` runs
+  without the policy.
+- `drlb_server-openssl35` refuses to run on a host in FIPS mode: its
+  OpenSSL is not FIPS validated. Use `drlb_server` there.
 - Backend certificate checks with no `ssl_backend_ca_list_file` also
   load `/etc/pki/tls/certs/ca-bundle.crt`, so the static OpenSSL still
   uses the RHEL trust store.
@@ -753,6 +762,7 @@ The section turns on SSL mode. All settings are optional.
 | `ssl_ciphersuites` | system policy | TLS 1.3 cipher suites |
 | `ssl_groups` | DRLB default, hybrid ML-KEM first | Key exchange groups, `system` = crypto policy (see Post-quantum key exchange) |
 | `ssl_sigalgs` | DRLB default, ML-DSA added | Signature algorithms, `system` = crypto policy |
+| `ssl_crypto_policy_file` | `/etc/crypto-policies/back-ends/opensslcnf.config` | RHEL 8 `drlb_server-openssl35` only: the crypto policy back end it applies; `none` = do not. Other builds get the policy from the system OpenSSL. |
 | `ssl_handshake_timeout_secs` | `30` | Seconds allowed for a TLS handshake, more than 0 |
 | `ssl_encrypt_backend` | `0` | Use TLS to connect to the back end nodes |
 | `ssl_verify_backend_cert` | `1` | Verify back end certificates |

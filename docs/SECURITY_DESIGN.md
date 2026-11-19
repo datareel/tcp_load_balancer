@@ -180,7 +180,7 @@ packages, the same model as the DataReel cluster manager (DRCM 1.49):
 | RHEL 8 package | OpenSSL | TLS | For |
 | --- | --- | --- | --- |
 | `drlb_server` | RHEL 8 system OpenSSL 1.1.1 (FIPS 140 validated by Red Hat) | classic; groups, signature algorithms and ciphers from the system crypto policy | FIPS-mode hosts |
-| `drlb_server-openssl35` | OpenSSL 3.5.9 LTS built in statically | post-quantum (section 5) | every other host |
+| `drlb_server-openssl35` | OpenSSL 3.5.9 LTS built in statically; applies the system crypto policy itself | post-quantum (section 5) | every other host; refuses to run in FIPS mode |
 
 - **Build checks:** every build except the RHEL 8 FIPS build stops on
   OpenSSL headers older than 3.5, and the program stops at start on an
@@ -195,9 +195,25 @@ packages, the same model as the DataReel cluster manager (DRCM 1.49):
 - **The static OpenSSL** is built from the official OpenSSL 3.5.9 tarball,
   checked against a pinned SHA-256 (`rpm/build_openssl35.sh`). An OpenSSL
   security fix means a new DRLB build of the openssl35 package. It is not
-  FIPS validated, and it does not read the system crypto policy (its
-  config path, `/opt/openssl-3.5/ssl`, is not installed), so DRLB's own
-  defaults apply. Back end checks still use the RHEL trust store.
+  FIPS validated. Back end checks still use the RHEL trust store.
+- **The system crypto policy applies to the static build too.** A static
+  OpenSSL does not read `/etc/pki/tls/openssl.cnf`, so DRLB applies the
+  policy itself: at start it reads the OpenSSL back end of the active
+  policy, `/etc/crypto-policies/back-ends/opensslcnf.config` (setting
+  `ssl_crypto_policy_file`), and applies each line (`CipherString`
+  with its security level, `Ciphersuites`, `MinProtocol`/`MaxProtocol`,
+  `SignatureAlgorithms`) to its TLS contexts with OpenSSL's `SSL_CONF_cmd`,
+  the same way the system OpenSSL does. `update-crypto-policies --set
+  FUTURE` (or a custom policy) therefore changes the static build like
+  every other program after a restart. The policy can make the protocol
+  range stricter but never below DRLB's TLS 1.2 minimum; `ssl_cipher_list`,
+  `ssl_ciphersuites`, `ssl_groups` and `ssl_sigalgs` apply after it. The
+  RHEL 8 policy files have no key exchange group list, so DRLB's hybrid
+  ML-KEM groups stay on top. A missing or bad policy file stops the
+  server (`ssl_crypto_policy_file = none` runs without it). Tested with
+  the RHEL 8 DEFAULT, FUTURE (SECLEVEL 3 refuses an RSA-2048 certificate,
+  AES-128 is refused) and LEGACY (3DES allowed for TLS 1.2, TLS 1.1 still
+  refused) policies and a TLS 1.3-only custom policy.
 - **The FIPS build** has no post-quantum TLS. It says so in the log at
   start, and `ssl_groups`/`ssl_sigalgs` are ignored there with a warning,
   so the FIPS crypto policy decides. Use the DEFAULT or FIPS crypto
@@ -214,12 +230,11 @@ packages, the same model as the DataReel cluster manager (DRCM 1.49):
   ECDSA certificates, on the front end and to verified back ends; X25519
   (not FIPS approved), 3DES and ML-KEM are refused; `ssl_groups` and
   `ssl_sigalgs` are ignored with a warning. All regression suites pass.
-- **`drlb_server-openssl35` on a FIPS mode host** still runs, but logs
-  "WARNING - FIPS mode is on, but this program's built-in OpenSSL is not
-  FIPS validated" at start. It cannot read the FIPS crypto policy, so it
-  uses OpenSSL 3.5's own default groups (`X25519MLKEM768`, X25519,
-  P-256, ...; not the P-256/P-384 hybrid groups) and accepts X25519. Do
-  not use it on FIPS mode hosts; install `drlb_server` there.
+- **`drlb_server-openssl35` refuses to run on a host in FIPS mode**: its
+  built-in OpenSSL is not a validated FIPS module. It stops at start with
+  "This host is in FIPS mode, and this program's built-in OpenSSL is not
+  FIPS validated" and the `dnf swap` command to the FIPS build
+  (`--version` still works). Tested on the same FIPS host.
 
 ## 7. HTTP forwarding {#http}
 

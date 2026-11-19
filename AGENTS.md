@@ -150,7 +150,7 @@ RPMs per OS (2.0.1):
 | --- | --- | --- | --- |
 | RHEL 10, RHEL 9 | `drlb_server` | system OpenSSL 3.5 | post-quantum (hybrid ML-KEM, ML-DSA) |
 | RHEL 8 | `drlb_server` | system OpenSSL 1.1.1 (FIPS 140 validated by Red Hat): the FIPS build | classic only, from the system crypto policy |
-| RHEL 8 | `drlb_server-openssl35` | OpenSSL 3.5.9 built in (static), no OpenSSL package needed | post-quantum; not for FIPS-mode hosts |
+| RHEL 8 | `drlb_server-openssl35` | OpenSSL 3.5.9 built in (static), no OpenSSL package needed; applies the system crypto policy itself | post-quantum; refuses to run in FIPS mode |
 
 Install one of the two RHEL 8 packages. `drlb_server-openssl35` provides
 and conflicts with `drlb_server`; `dnf swap` moves a host between them.
@@ -318,10 +318,16 @@ change nothing until the person agrees on the cause and the fix (rule 2).
 - **Clients cannot connect at all.** firewalld, `listen_ip_addr`, the
   back end nodes (the log shows dead nodes), `max_connections`, open file
   limits ("Tuning").
-- **"FIPS mode is on, but this program's built-in OpenSSL is not FIPS
-  validated".** The RHEL 8 `drlb_server-openssl35` package is on a FIPS
-  mode host. The person moves the host to `drlb_server` with
-  `dnf swap` (section 5) as an approved step.
+- **"This host is in FIPS mode, and this program's built-in OpenSSL is
+  not FIPS validated".** The RHEL 8 `drlb_server-openssl35` package does
+  not run on a FIPS mode host. The person moves the host to `drlb_server`
+  with `dnf swap` (the command is in the message) as an approved step.
+- **"Cannot read the system crypto policy" or "Bad crypto policy
+  setting".** `drlb_server-openssl35` applies the RHEL crypto policy back
+  end (`ssl_crypto_policy_file`, default
+  `/etc/crypto-policies/back-ends/opensslcnf.config`). Check
+  `update-crypto-policies --show` and that file; do not set
+  `ssl_crypto_policy_file = none` to get around a policy (rule 6).
 - **On a FIPS mode host, X25519 clients are refused.** Expected: X25519 is
   not FIPS approved; clients use P-256 or P-384.
 - **A client with an old TLS stack is refused.** Expected: TLS 1.2 is the

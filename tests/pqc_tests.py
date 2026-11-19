@@ -270,13 +270,106 @@ def test_fips_build():
 
 
 def test_static_on_fips_host():
-    """A static OpenSSL build on a host in FIPS mode warns that its OpenSSL is not FIPS validated"""
+    """The static OpenSSL build refuses to run on a host in FIPS mode"""
     linked = linked_with()
     if 'FIPS mode on' not in linked or ', static, ' not in linked:
         return
     b = Bridge('static_fips_host', [])
-    check('static build on a FIPS mode host warns: built-in OpenSSL not FIPS validated',
-          b.started and 'not FIPS validated' in b.output())
+    out = b.output()
+    check('static build refuses to start on a FIPS mode host',
+          not b.started and 'not FIPS validated' in out and 'install the drlb_server package' in out, out[-300:])
+    b.stop()
+
+
+# RHEL 8 crypto policy back ends (/usr/share/crypto-policies/<POLICY>/opensslcnf.txt)
+RHEL8_POLICIES = {
+    'DEFAULT': """CipherString = @SECLEVEL=2:kEECDH:kRSA:kEDH:kPSK:kDHEPSK:kECDHEPSK:-aDSS:-3DES:!DES:!RC4:!RC2:!IDEA:-SEED:!eNULL:!aNULL:!MD5:-SHA384:-CAMELLIA:-ARIA:-AESCCM8
+Ciphersuites = TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256:TLS_AES_128_CCM_SHA256
+TLS.MinProtocol = TLSv1.2
+TLS.MaxProtocol = TLSv1.3
+DTLS.MinProtocol = DTLSv1.2
+DTLS.MaxProtocol = DTLSv1.2
+SignatureAlgorithms = ECDSA+SHA256:ECDSA+SHA384:ECDSA+SHA512:ed25519:ed448:rsa_pss_pss_sha256:rsa_pss_rsae_sha256:rsa_pss_pss_sha384:rsa_pss_rsae_sha384:rsa_pss_pss_sha512:rsa_pss_rsae_sha512:RSA+SHA256:RSA+SHA384:RSA+SHA512:ECDSA+SHA224:RSA+SHA224:ECDSA+SHA1:RSA+SHA1""",
+    'FUTURE': """CipherString = @SECLEVEL=3:kEECDH:kEDH:kPSK:kDHEPSK:kECDHEPSK:-kRSA:-aDSS:-AES128:-SHA256:-3DES:!DES:!RC4:!RC2:!IDEA:-SEED:!eNULL:!aNULL:-SHA1:!MD5:-SHA384:-CAMELLIA:-ARIA:-AESCCM8
+Ciphersuites = TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256
+TLS.MinProtocol = TLSv1.2
+TLS.MaxProtocol = TLSv1.3
+DTLS.MinProtocol = DTLSv1.2
+DTLS.MaxProtocol = DTLSv1.2
+SignatureAlgorithms = ECDSA+SHA256:ECDSA+SHA384:ECDSA+SHA512:ed25519:ed448:rsa_pss_pss_sha256:rsa_pss_rsae_sha256:rsa_pss_pss_sha384:rsa_pss_rsae_sha384:rsa_pss_pss_sha512:rsa_pss_rsae_sha512:RSA+SHA256:RSA+SHA384:RSA+SHA512""",
+    'LEGACY': """CipherString = @SECLEVEL=1:kEECDH:kRSA:kEDH:kPSK:kDHEPSK:kECDHEPSK:!DES:!RC2:!IDEA:-SEED:!eNULL:!aNULL:!MD5:-SHA384:-CAMELLIA:-ARIA:-AESCCM8
+Ciphersuites = TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256:TLS_AES_128_CCM_SHA256
+TLS.MinProtocol = TLSv1
+TLS.MaxProtocol = TLSv1.3
+DTLS.MinProtocol = DTLSv1
+DTLS.MaxProtocol = DTLSv1.2
+SignatureAlgorithms = ECDSA+SHA256:ECDSA+SHA384:ECDSA+SHA512:ed25519:ed448:rsa_pss_pss_sha256:rsa_pss_rsae_sha256:rsa_pss_pss_sha384:rsa_pss_rsae_sha384:rsa_pss_pss_sha512:rsa_pss_rsae_sha512:RSA+SHA256:RSA+SHA384:RSA+SHA512:ECDSA+SHA224:RSA+SHA224:DSA+SHA256:DSA+SHA384:DSA+SHA512:DSA+SHA224:ECDSA+SHA1:RSA+SHA1:DSA+SHA1""",
+    'TLS13ONLY': """TLS.MinProtocol = TLSv1.3
+TLS.MaxProtocol = TLSv1.3""",
+    'BAD': """CipherString = @SECLEVEL=2:NOT-A-CIPHER-AT-ALL
+Ciphersuites = NOT_A_SUITE""",
+}
+
+
+def policy_file(name):
+    f = os.path.join(WORK, 'policy_%s.txt' % name)
+    with open(f, 'w') as fh:
+        fh.write(RHEL8_POLICIES[name])  # like the RHEL files: no newline at the end
+    return f
+
+
+def test_crypto_policy():
+    """The static OpenSSL build applies the RHEL crypto policy (ssl_crypto_policy_file)"""
+    linked = linked_with()
+    if ', static, ' not in linked or 'FIPS mode on' in linked:
+        return
+    weak = ['-tls1_2', '-cipher', 'DES-CBC3-SHA:@SECLEVEL=0']
+    # DEFAULT: ML-KEM first still, 3DES refused, TLS 1.2 AES-128 allowed
+    b = Bridge('policy_default', ['ssl_crypto_policy_file = %s' % policy_file('DEFAULT')])
+    out = b.output()
+    check('DEFAULT policy applied at start', b.started and 'System crypto policy applied' in out, out[-200:] if not b.started else '')
+    r = s_client('rsa_ca.crt', 'X25519MLKEM768')
+    check('DEFAULT policy: X25519MLKEM768 negotiated (DRLB groups on top)', r is not None and r[0] == 'X25519MLKEM768', str(r))
+    r = s_client('rsa_ca.crt', 'secp256r1', weak)
+    check('DEFAULT policy: 3DES refused', r is None, str(r))
+    r = s_client('rsa_ca.crt', 'secp256r1', ['-tls1_2', '-cipher', 'ECDHE-RSA-AES128-GCM-SHA256'])
+    check('DEFAULT policy: TLS 1.2 AES-128-GCM allowed', r is not None, str(r))
+    b.stop()
+    # LEGACY: 3DES allowed by the policy, but DRLB's TLS 1.2 minimum stays
+    b = Bridge('policy_legacy', ['ssl_crypto_policy_file = %s' % policy_file('LEGACY')])
+    r = s_client('rsa_ca.crt', 'secp256r1', weak)
+    check('LEGACY policy: 3DES allowed (the policy decides)', b.started and r is not None, str(r))
+    r = s_client('rsa_ca.crt', None, ['-tls1_1', '-cipher', 'ALL:@SECLEVEL=0'])
+    check('LEGACY policy: TLS 1.1 still refused (DRLB minimum TLS 1.2)', r is None, str(r))
+    r = s_client('rsa_ca.crt', 'X25519MLKEM768')
+    check('LEGACY policy: X25519MLKEM768 negotiated', r is not None and r[0] == 'X25519MLKEM768', str(r))
+    b.stop()
+    # FUTURE: SECLEVEL 3 refuses an RSA-2048 certificate; with ECDSA P-256, AES-128 is refused
+    b = Bridge('policy_future_rsa', ['ssl_crypto_policy_file = %s' % policy_file('FUTURE')])
+    check('FUTURE policy: RSA-2048 certificate refused at start (SECLEVEL 3)', not b.started, b.output()[-200:])
+    b.stop()
+    b = Bridge('policy_future_ec', ['ssl_crypto_policy_file = %s' % policy_file('FUTURE')], prefix='ec_')
+    r = s_client('ec_ca.crt', 'X25519MLKEM768')
+    check('FUTURE policy: ECDSA certificate, X25519MLKEM768 negotiated', b.started and r is not None and r[0] == 'X25519MLKEM768', str(r))
+    r = s_client('ec_ca.crt', 'secp256r1', ['-tls1_2', '-cipher', 'ECDHE-ECDSA-AES128-GCM-SHA256'])
+    check('FUTURE policy: TLS 1.2 AES-128 refused', r is None, str(r))
+    r = s_client('ec_ca.crt', 'X25519MLKEM768', ['-ciphersuites', 'TLS_AES_128_GCM_SHA256'])
+    check('FUTURE policy: TLS 1.3 AES-128 suite refused', r is None, str(r))
+    b.stop()
+    # A custom policy with TLS 1.3 only is stricter than DRLB, so it applies
+    b = Bridge('policy_tls13', ['ssl_crypto_policy_file = %s' % policy_file('TLS13ONLY')])
+    r = s_client('rsa_ca.crt', 'secp256r1', ['-tls1_2'])
+    check('TLS 1.3-only policy: TLS 1.2 refused', b.started and r is None, str(r))
+    b.stop()
+    # Errors stop the server; "none" runs without the policy
+    b = Bridge('policy_bad', ['ssl_crypto_policy_file = %s' % policy_file('BAD')])
+    check('bad crypto policy setting refused at start', not b.started and 'Bad crypto policy setting' in b.output())
+    b.stop()
+    b = Bridge('policy_missing', ['ssl_crypto_policy_file = %s/no_such_policy' % WORK])
+    check('missing crypto policy file refused at start', not b.started and 'Cannot read the system crypto policy' in b.output())
+    b.stop()
+    b = Bridge('policy_none', ['ssl_crypto_policy_file = none'])
+    check('ssl_crypto_policy_file = none starts without the policy', b.started and 'System crypto policy applied' not in b.output())
     b.stop()
 
 
@@ -371,7 +464,7 @@ def main():
     global FIPS_BUILD
     FIPS_BUILD = 'FIPS build' in linked_with()
     make_certs()
-    tests = (test_openssl_version, test_static_on_fips_host, test_frontend_groups, test_ssl_groups_setting, test_mldsa_frontend,
+    tests = (test_openssl_version, test_static_on_fips_host, test_crypto_policy, test_frontend_groups, test_ssl_groups_setting, test_mldsa_frontend,
              test_backends)
     if FIPS_BUILD:
         print('FIPS build (system OpenSSL, no post-quantum TLS): running the FIPS checks only')

@@ -89,6 +89,8 @@ struct SSLConfig {
   std::string ssl_ciphersuites; // TLS 1.3 cipher suites, system crypto policy if empty
   std::string ssl_groups;  // Key exchange groups, DRLB default (ML-KEM first) if empty, "system" = crypto policy
   std::string ssl_sigalgs; // Signature algorithms, DRLB default (ML-DSA first) if empty, "system" = crypto policy
+  // RHEL 8 static OpenSSL build only: the crypto policy back end it applies ("none" = do not)
+  std::string ssl_crypto_policy_file = "/etc/crypto-policies/back-ends/opensslcnf.config";
 
   SSL_CTX *server_ctx = nullptr; // Frontend
   SSL_CTX *client_ctx = nullptr; // Shared by all backend connections

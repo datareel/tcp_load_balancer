@@ -391,6 +391,9 @@ static const char *default_config =
   "# certificates work on the frontend and the backends.\n"
   "# system = use the crypto policy list.\n"
   "##ssl_sigalgs = system\n"
+  "# RHEL 8 drlb_server-openssl35 only (static OpenSSL): the system crypto\n"
+  "# policy back end it applies at start. none = do not apply a policy.\n"
+  "##ssl_crypto_policy_file = /etc/crypto-policies/back-ends/opensslcnf.config\n"
   "# Seconds allowed for a TLS handshake\n"
   "##ssl_handshake_timeout_secs = 30\n"
   "# Private key and certificate files\n"
@@ -697,6 +700,7 @@ static int set_sslconfig(const std::string &name, const std::string &value)
   else if(name == "ssl_ciphersuites") ssl.ssl_ciphersuites = value;
   else if(name == "ssl_groups") ssl.ssl_groups = value;
   else if(name == "ssl_sigalgs") ssl.ssl_sigalgs = value;
+  else if(name == "ssl_crypto_policy_file") ssl.ssl_crypto_policy_file = value;
   else if(name == "ssl_protocol") ssl.ssl_protocol = value;
   else nt_print("WARNING - Unknown [SSLCONFIG] setting ignored:", name.c_str());
   return 0;

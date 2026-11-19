@@ -17,6 +17,20 @@ The full documentation is the
 [user guide](docs/USER_GUIDE.md): install, services, every config
 setting, the load balancing schemes, TLS, logging, stats, tuning and
 testing. [DESIGN.md](DESIGN.md) describes how the code is organized.
+The [security design white paper](docs/SECURITY_DESIGN.md) explains how
+DRLB protects the services behind it: TLS, post-quantum key exchange,
+the OpenSSL builds per RHEL release, the service sandboxing and the
+October 2026 security review.
+
+**AI-assisted install, upgrade and support:** [AGENTS.md](AGENTS.md)
+(read by Gemini CLI through `GEMINI.md`, Claude Code through
+`CLAUDE.md`, and other agents directly) lets an approved enterprise AI
+agent assist your administrators with installing, upgrading and
+troubleshooting DRLB. Human in the loop, never autonomous: your
+administrators run or approve every step, and the agent never sees a
+private key or password. Before any AI assistance, review your
+organization's AI usage policies and get formal written management
+approval; naming an AI tool is a reference only, not an endorsement.
 
 Supported platforms: RHEL 10, RHEL 9, and RHEL 8 with NetworkManager
 and firewalld (and rebuilds such as Rocky Linux and AlmaLinux).
@@ -116,9 +130,10 @@ make test                    # RHEL 8: make test PYTHON=python3.11
 ```
 
 runs `tests/drlb_tests.py` and `tests/ssl_bridge_tests.py` (the 1.60
-regression suites) and `tests/compat_tests.py` against `./drlb_server`.
-They need Python 3.7 or later and the `openssl` command and use local
-ports 18000-18299. `tests/load/run_load_tests.py` runs the load and
+regression suites), `tests/compat_tests.py` and `tests/pqc_tests.py`
+(post-quantum TLS; FIPS checks on a FIPS build) against `./drlb_server`.
+They need Python 3.7 or later and the `openssl` command (3.5 or later for
+`pqc_tests.py`) and use local ports 18000-18399. `tests/load/run_load_tests.py` runs the load and
 stress tests (needs `ab` and matplotlib).
 
 ## License

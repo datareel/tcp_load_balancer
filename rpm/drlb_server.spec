@@ -58,6 +58,10 @@ tar xf %{drlb_tarball} -C $RPM_BUILD_ROOT
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/RELEASE_NOTES_2.0.txt"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/RELEASE_NOTES_2.0.1.txt"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/USER_GUIDE.md"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/SECURITY_DESIGN.md"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/AGENTS.md"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/CLAUDE.md"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/GEMINI.md"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/COPYING"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/version.txt"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/example_config.cfg"
@@ -137,6 +141,9 @@ exit 0
 - Post-quantum TLS: hybrid ML-KEM key exchange (X25519MLKEM768 first)
   on the frontend and backends by default, ML-DSA certificates
 - New [SSLCONFIG] settings ssl_groups and ssl_sigalgs
+- Security design white paper (SECURITY_DESIGN.md) and the AI-assisted
+  install, upgrade and support guide (AGENTS.md, CLAUDE.md, GEMINI.md)
+  in /usr/share/doc/drlb
 * Sat Oct 31 2026 Datareel <datareel.com>
 - Version 2.0
 - drlb_server and drlb_ssl_server combined in one program and package

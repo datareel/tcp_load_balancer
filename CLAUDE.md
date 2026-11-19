@@ -1,0 +1,2 @@
+<!-- DRLB (DataReel Load Balancer): AI-assisted install, upgrade and support. Before any AI assistance: written management approval under your AI usage policy and approved enterprise AI models only (AGENTS.md, "Before you use AI assistance"). Never read or repeat a private key or password. Naming an AI tool is a reference only, not an endorsement. -->
+@AGENTS.md

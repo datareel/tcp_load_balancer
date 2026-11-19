@@ -1767,4 +1767,14 @@ value.
 
 Bugs and questions: https://datareel.com/contact.php
 
+Security design: [SECURITY_DESIGN.md](SECURITY_DESIGN.md)
+(https://datareel.com/drlb/security_design.php).
+
+AI-assisted install, upgrade and support:
+[AGENTS.md](../AGENTS.md) (https://datareel.com/drlb/ai_assisted_guide.php).
+Before any AI assistance, review your organization's AI usage policies
+and get formal written management approval; use only approved
+enterprise AI models. The agent assists your administrators, who run or
+approve every step; it never acts on its own.
+
 Source code and downloads: https://datareel.com/downloads/drlb/

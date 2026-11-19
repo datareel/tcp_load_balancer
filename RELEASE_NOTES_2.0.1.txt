@@ -88,6 +88,17 @@ of stopping the server.)
 * log_level = 4 logs the TLS version, cipher and key exchange group of
   every frontend and backend connection.
 
+Documentation
+-------------
+* docs/SECURITY_DESIGN.md: the security design white paper (also
+  https://datareel.com/drlb/security_design.php).
+* AGENTS.md, with CLAUDE.md and GEMINI.md: the AI-assisted install,
+  upgrade and support guide (also
+  https://datareel.com/drlb/ai_assisted_guide.php). Human in the loop,
+  never autonomous; written management approval and approved enterprise
+  AI models first.
+* Both are installed in /usr/share/doc/drlb by the RPMs.
+
 Tests
 -----
 * New tests/pqc_tests.py (part of "make test"): ML-KEM groups on the

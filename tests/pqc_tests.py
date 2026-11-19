@@ -44,13 +44,18 @@ def sh(*args):
     subprocess.run(args, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=WORK)
 
 
+def newkey(alg):
+    """openssl req -newkey arguments: 'ec' means an ECDSA P-256 key"""
+    return ['ec', '-pkeyopt', 'ec_paramgen_curve:P-256'] if alg == 'ec' else [alg]
+
+
 def make_ca(prefix, alg):
-    sh('openssl', 'req', '-x509', '-newkey', alg, '-nodes', '-keyout', prefix + 'ca.key',
+    sh('openssl', 'req', '-x509', '-newkey', *newkey(alg), '-nodes', '-keyout', prefix + 'ca.key',
        '-out', prefix + 'ca.crt', '-days', '2', '-subj', '/CN=DRLB PQC Test CA ' + prefix)
 
 
 def make_leaf(prefix, name, alg, san):
-    sh('openssl', 'req', '-newkey', alg, '-nodes', '-keyout', prefix + name + '.key',
+    sh('openssl', 'req', '-newkey', *newkey(alg), '-nodes', '-keyout', prefix + name + '.key',
        '-out', prefix + name + '.csr', '-subj', '/CN=' + name)
     ext = os.path.join(WORK, prefix + name + '.ext')
     with open(ext, 'w') as f:
@@ -63,7 +68,8 @@ def make_leaf(prefix, name, alg, san):
 def make_certs():
     make_ca('rsa_', 'rsa:2048')
     make_ca('mldsa_', 'mldsa65')
-    for p, alg in (('rsa_', 'rsa:2048'), ('mldsa_', 'mldsa65')):
+    make_ca('ec_', 'ec')
+    for p, alg in (('rsa_', 'rsa:2048'), ('mldsa_', 'mldsa65'), ('ec_', 'ec')):
         make_leaf(p, 'front', alg, 'DNS:localhost,IP:127.0.0.1')
         make_leaf(p, 'back', alg, 'DNS:backend.test,IP:127.0.0.1')
 
@@ -212,25 +218,41 @@ def test_openssl_version():
 
 def test_fips_build():
     """The RHEL 8 FIPS build (system OpenSSL 1.1.1): no post-quantum TLS,
-    the crypto policy decides, ssl_groups/ssl_sigalgs are ignored"""
+    the crypto policy decides, ssl_groups/ssl_sigalgs are ignored. On a host
+    in FIPS mode the FIPS policy also refuses X25519 (not FIPS approved)."""
+    linked = linked_with()
+    old = 'OpenSSL 1.' in linked  # RHEL 8: no ML-KEM at all; else the crypto policy decides
+    host_fips = 'FIPS mode on' in linked
+    classic = 'secp256r1' if host_fips else 'X25519'
     b = Bridge('fips_default', ['ssl_protocol = TLS'])
     out = b.output()
     check('FIPS build starts with the default settings', b.started)
     check('FIPS build logs that post-quantum TLS is not available',
           'post-quantum TLS (ML-KEM key exchange, ML-DSA certificates) is not available' in out)
-    r = s_client('rsa_ca.crt', 'X25519')
-    check('FIPS build: X25519 client works', r is not None and r[0] == 'X25519', str(r))
     r = s_client('rsa_ca.crt', 'secp256r1')
     check('FIPS build: P-256 client works', r is not None and r[0] == 'secp256r1', str(r))
-    old = 'OpenSSL 1.' in linked_with()  # RHEL 8: no ML-KEM at all; else the crypto policy decides
+    r = s_client('rsa_ca.crt', 'secp384r1')
+    check('FIPS build: P-384 client works', r is not None and r[0] == 'secp384r1', str(r))
+    r = s_client('rsa_ca.crt', 'X25519')
+    if host_fips:
+        check('FIPS mode host: X25519 client is refused (not FIPS approved)', r is None, str(r))
+    else:
+        check('FIPS build: X25519 client works', r is not None and r[0] == 'X25519', str(r))
+    for proto in ('-tls1_2', '-tls1_3'):
+        r = s_client('rsa_ca.crt', 'secp256r1', [proto])
+        check('FIPS build: %s with P-256 and an RSA certificate' % proto[1:].replace('_', '.'), r is not None and r[2], str(r))
     r = s_client('rsa_ca.crt', 'X25519MLKEM768')
     if old:
         check('FIPS build: ML-KEM only client is refused (no ML-KEM in 1.1.1)', r is None, str(r))
-    r = s_client('rsa_ca.crt', 'X25519MLKEM768:X25519')
-    check('FIPS build: ML-KEM capable client connects', r is not None and (r[0] == 'X25519' or not old), str(r))
+    r = s_client('rsa_ca.crt', 'X25519MLKEM768:%s' % classic)
+    check('FIPS build: ML-KEM capable client connects', r is not None and (r[0] == classic or not old), str(r))
+    b.stop()
+    b = Bridge('fips_ecdsa', [], prefix='ec_')
+    r = s_client('ec_ca.crt', 'secp256r1')
+    check('FIPS build: ECDSA P-256 certificate', b.started and r is not None and r[2] and 'ecdsa' in (r[1] or '').lower(), str(r))
     b.stop()
     b = Bridge('fips_groups', ['ssl_groups = X25519MLKEM768', 'ssl_sigalgs = mldsa65'])
-    r = s_client('rsa_ca.crt', 'X25519')
+    r = s_client('rsa_ca.crt', classic)
     check('FIPS build: ssl_groups/ssl_sigalgs with PQ names do not stop the server',
           b.started and r is not None, str(r))
     check('FIPS build: ssl_groups/ssl_sigalgs ignored warning', 'ignored in the FIPS build' in b.output())
@@ -239,9 +261,23 @@ def test_fips_build():
     check('FIPS build: ssl_protocol = TLSv1_2 starts without the PQ warning',
           b.started and 'no post-quantum key exchange' not in b.output())
     b.stop()
-    backend_case('X25519 only, FIPS build', 'rsa_', 'X25519', [], True)
+    backend_case('%s only, FIPS build' % classic, 'rsa_', classic, [], True)
+    backend_case('ECDSA certificate, FIPS build', 'ec_', 'secp256r1', [], True)
+    if host_fips:
+        backend_case('X25519 only on a FIPS mode host', 'rsa_', 'X25519', [], False)
     if old:
         backend_case('ML-KEM only, FIPS build', 'rsa_', 'X25519MLKEM768', [], False)
+
+
+def test_static_on_fips_host():
+    """A static OpenSSL build on a host in FIPS mode warns that its OpenSSL is not FIPS validated"""
+    linked = linked_with()
+    if 'FIPS mode on' not in linked or ', static, ' not in linked:
+        return
+    b = Bridge('static_fips_host', [])
+    check('static build on a FIPS mode host warns: built-in OpenSSL not FIPS validated',
+          b.started and 'not FIPS validated' in b.output())
+    b.stop()
 
 
 def test_frontend_groups():
@@ -328,7 +364,7 @@ def main():
     global FIPS_BUILD
     FIPS_BUILD = 'FIPS build' in linked_with()
     make_certs()
-    tests = (test_openssl_version, test_frontend_groups, test_ssl_groups_setting, test_mldsa_frontend,
+    tests = (test_openssl_version, test_static_on_fips_host, test_frontend_groups, test_ssl_groups_setting, test_mldsa_frontend,
              test_backends)
     if FIPS_BUILD:
         print('FIPS build (system OpenSSL, no post-quantum TLS): running the FIPS checks only')

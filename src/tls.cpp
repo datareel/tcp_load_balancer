@@ -300,6 +300,10 @@ int tls_init()
 #endif
     nt_print("Certificate key type:", type ? type : "unknown");
   }
+  if(fips_mode() && std::string(DRLB_OPENSSL_FLAVOR) == "static") {
+    nt_print("WARNING - FIPS mode is on, but this program's built-in OpenSSL is not FIPS validated");
+    nt_print("WARNING - On a FIPS mode host use the drlb_server package (FIPS build on the system OpenSSL)");
+  }
   if(!pqc_build()) {
     nt_print("INFO - FIPS build: post-quantum TLS (ML-KEM key exchange, ML-DSA certificates) is not available");
     nt_print("INFO - TLS key exchange groups and signature algorithms follow the system crypto policy");

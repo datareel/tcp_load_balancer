@@ -286,10 +286,16 @@ def test_frontend_groups():
     check('bridge starts with the default groups', b.started)
     r = s_client('rsa_ca.crt', 'X25519MLKEM768')
     check('frontend X25519MLKEM768', r is not None and r[0] == 'X25519MLKEM768', str(r))
-    r = s_client('rsa_ca.crt', 'SecP256r1MLKEM768')
-    check('frontend SecP256r1MLKEM768', r is not None and r[0] == 'SecP256r1MLKEM768', str(r))
-    r = s_client('rsa_ca.crt', 'SecP384r1MLKEM1024')
-    check('frontend SecP384r1MLKEM1024', r is not None and r[0] == 'SecP384r1MLKEM1024', str(r))
+    # On a FIPS mode host an OpenSSL 3.5 build keeps the crypto policy lists. The
+    # static build cannot read the policy, so it uses OpenSSL 3.5's own default
+    # groups, which have X25519MLKEM768 but not the P-256/P-384 hybrids.
+    policy_lists = 'FIPS mode on' in linked_with() and ', static, ' in linked_with()
+    for g in ('SecP256r1MLKEM768', 'SecP384r1MLKEM1024'):
+        r = s_client('rsa_ca.crt', g)
+        if policy_lists:
+            check('frontend %s refused (static build, FIPS mode host: OpenSSL default groups)' % g, r is None, str(r))
+        else:
+            check('frontend %s' % g, r is not None and r[0] == g, str(r))
     r = s_client('rsa_ca.crt', 'X25519:X25519MLKEM768')
     check('frontend prefers ML-KEM over a classical key share (HRR)',
           r is not None and r[0] == 'X25519MLKEM768', str(r))
@@ -352,7 +358,8 @@ def test_backends():
     log = backend_case('X25519MLKEM768 only', 'rsa_', 'X25519MLKEM768', [], True)
     check('backend log shows group X25519MLKEM768 (log_level 4)', 'group X25519MLKEM768' in log)
     backend_case('X25519 only (no ML-KEM)', 'rsa_', 'X25519', [], True)
-    backend_case('SecP256r1MLKEM768 only', 'rsa_', 'SecP256r1MLKEM768', [], True)
+    backend_case('SecP256r1MLKEM768 only', 'rsa_', 'SecP256r1MLKEM768', [],
+                 not ('FIPS mode on' in linked_with() and ', static, ' in linked_with()))
     backend_case('ML-DSA-65 certificate', 'mldsa_', None, [], True)
     backend_case('ML-KEM only with ssl_groups = X25519', 'rsa_', 'X25519MLKEM768', ['ssl_groups = X25519'], False)
 

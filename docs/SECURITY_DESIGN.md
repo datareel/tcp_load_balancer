@@ -208,6 +208,18 @@ packages, the same model as the DataReel cluster manager (DRCM 1.49):
 - **FIPS mode** (`fips-mode-setup --enable`): use the FIPS build.
   OpenSSL 3.5 builds also default `ssl_groups` and `ssl_sigalgs` to the
   crypto policy lists when the host is in FIPS mode.
+- **Tested on a RHEL 8.10 host in FIPS mode** (`fips_enabled` = 1, FIPS
+  crypto policy), 11/19/2026: the FIPS build reports "FIPS mode on" in
+  `--version`; TLS 1.2 and 1.3 work with P-256 and P-384 and with RSA and
+  ECDSA certificates, on the front end and to verified back ends; X25519
+  (not FIPS approved), 3DES and ML-KEM are refused; `ssl_groups` and
+  `ssl_sigalgs` are ignored with a warning. All regression suites pass.
+- **`drlb_server-openssl35` on a FIPS mode host** still runs, but logs
+  "WARNING - FIPS mode is on, but this program's built-in OpenSSL is not
+  FIPS validated" at start. It cannot read the FIPS crypto policy, so it
+  uses OpenSSL 3.5's own default groups (`X25519MLKEM768`, X25519,
+  P-256, ...; not the P-256/P-384 hybrid groups) and accepts X25519. Do
+  not use it on FIPS mode hosts; install `drlb_server` there.
 
 ## 7. HTTP forwarding {#http}
 

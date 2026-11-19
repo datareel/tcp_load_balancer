@@ -318,6 +318,12 @@ change nothing until the person agrees on the cause and the fix (rule 2).
 - **Clients cannot connect at all.** firewalld, `listen_ip_addr`, the
   back end nodes (the log shows dead nodes), `max_connections`, open file
   limits ("Tuning").
+- **"FIPS mode is on, but this program's built-in OpenSSL is not FIPS
+  validated".** The RHEL 8 `drlb_server-openssl35` package is on a FIPS
+  mode host. The person moves the host to `drlb_server` with
+  `dnf swap` (section 5) as an approved step.
+- **On a FIPS mode host, X25519 clients are refused.** Expected: X25519 is
+  not FIPS approved; clients use P-256 or P-384.
 - **A client with an old TLS stack is refused.** Expected: TLS 1.2 is the
   minimum. Report it; do not lower the protocol or the policy (rule 6).
 

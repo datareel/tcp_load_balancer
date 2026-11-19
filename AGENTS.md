@@ -244,7 +244,7 @@ Manual: "Installing from RPM", "Quick start", "Running as a service" and
 5. `--check-config` every active config with the new program.
 6. `systemctl restart` the services one at a time; check `status`, the
    log, and a test connection (for TLS:
-   `openssl s_client -connect HOST:PORT -brief </dev/null`, which shows
+   `openssl s_client -connect HOST:PORT -brief < /dev/null`, which shows
    the protocol and the negotiated group).
 7. Roll back if a check fails: reinstall the old RPM with
    `dnf downgrade` or `rpm -Uvh --oldpackage`, put the backed up configs
@@ -288,7 +288,7 @@ change nothing until the person agrees on the cause and the fix (rule 2).
 | Logs | `/var/log/drlb/*.log`, `journalctl -u drlb_server -u drlb_ssl_server` |
 | Stats | the `stats_file_name` file in `/var/log/drlb/` |
 | Listening ports | `ss -ltnp` |
-| TLS from a client | `openssl s_client -connect HOST:PORT -brief </dev/null` (protocol, cipher, group) |
+| TLS from a client | `openssl s_client -connect HOST:PORT -brief < /dev/null` (protocol, cipher, group) |
 | Certificate | `openssl x509 -noout -subject -issuer -dates -ext subjectAltName -in CERT` |
 | Crypto policy and FIPS | `update-crypto-policies --show`, `fips-mode-setup --check` |
 | Firewall | `firewall-cmd --list-all` |

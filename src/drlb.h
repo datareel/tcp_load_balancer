@@ -17,6 +17,7 @@
 #include <ctime>
 #include <memory>
 #include <mutex>
+#include <ostream>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -39,6 +40,10 @@ enum Scheme {
   LB_RR,
   LB_WEIGHTED
 };
+
+// mode in [LBSERVER]: LB is the load balancer (default), MUX the port
+// multiplexer (mux.cpp)
+enum RunMode { MODE_LB = 0, MODE_MUX };
 
 // One backend node, from a [LBNODE] section
 struct Node {
@@ -89,6 +94,9 @@ struct SSLConfig {
   std::string ssl_ciphersuites; // TLS 1.3 cipher suites, system crypto policy if empty
   std::string ssl_groups;  // Key exchange groups, DRLB default (ML-KEM first) if empty, "system" = crypto policy
   std::string ssl_sigalgs; // Signature algorithms, DRLB default (ML-DSA first) if empty, "system" = crypto policy
+  // MUX tunnel listener: require a client certificate signed by ssl_client_ca_list_file
+  bool ssl_verify_client = true;
+  std::string ssl_client_ca_list_file;
   // RHEL 8 static OpenSSL build only: the crypto policy back end it applies ("none" = do not)
   std::string ssl_crypto_policy_file = "/etc/crypto-policies/back-ends/opensslcnf.config";
 
@@ -96,9 +104,74 @@ struct SSLConfig {
   SSL_CTX *client_ctx = nullptr; // Shared by all backend connections
 };
 
+// Port multiplexer (mode = MUX). A [MUXPORT] is a local port whose
+// connections or datagrams go through a tunnel to a peer DRLB; a
+// [MUXDEST] is where a channel that arrives from a peer is delivered. Both
+// ends can have both, so channels go in either direction. [MUXTUNNEL] is
+// a peer this server connects to; mux_listen = 1 accepts tunnels from
+// peers on port and listen_ip_addr.
+struct MuxTunnelConfig {
+  std::string name;
+  std::string remote_host;
+  int remote_port = 0;
+  int connections = 1;      // tunnel_connections: parallel tunnels to this peer
+  std::string ssl_hostname; // Name checked in the peer certificate, remote_host if empty
+};
+
+struct MuxPort {
+  std::string channel;
+  int udp = 0;
+  std::string listen_ip_addr;
+  int port = 0;
+  std::string peer; // Only tunnels to this peer name, any peer if empty
+
+  std::atomic<unsigned long> streams_total{0}, refused{0}, udp_dropped{0};
+  std::atomic<unsigned long long> bytes_out{0}, bytes_in{0};
+  std::atomic<int> streams_open{0};
+};
+
+struct MuxDest {
+  std::string channel;
+  int udp = 0;
+  std::string hostname; // One destination, or
+  int port = 0;
+  std::vector<std::string> node_names; // [LBNODE] names, load balanced with scheme
+  Scheme scheme = LB_RR;
+  Scheme assigned_default = LB_RR;
+  std::vector<Node *> nodes;
+  std::unique_ptr<Node> own_node;
+
+  std::atomic<unsigned long> rr{0};
+  std::atomic<unsigned long> streams_total{0}, open_fail{0}, udp_dropped{0};
+  std::atomic<unsigned long long> bytes_out{0}, bytes_in{0};
+  std::atomic<int> streams_open{0};
+};
+
+struct MuxConfig {
+  int listen = 0;          // mux_listen: accept tunnels on port
+  std::string peer_name;   // mux_peer_name, the host name if empty
+  int allow_plain = 0;     // mux_allow_plain: tunnel without TLS when there is no [SSLCONFIG]
+  bool plain = false;      // Running without TLS
+  std::vector<std::string> allowed_peers; // mux_allowed_peers
+  int frame_size = 16384;      // mux_frame_size: max DATA payload
+  int stream_window = 262144;  // mux_stream_window: flow control window per stream
+  int max_streams = 1024;      // mux_max_streams: per tunnel
+  int tunnel_buffer = 1048576; // mux_tunnel_buffer: queued bytes before TCP streams pause
+  int udp_queue_bytes = 1048576; // mux_udp_queue_bytes: extra queue for UDP before drops
+  int udp_idle_secs = 60;      // mux_udp_idle_secs
+  int udp_max_flows = 4096;    // mux_udp_max_flows: per [MUXPORT]
+  int keepalive_secs = 15;     // mux_keepalive_secs
+  int retry_secs = 5;          // mux_retry_secs: first reconnect wait, doubles up to 60
+  int hold_secs = 10;          // mux_hold_secs: hold new TCP clients while no tunnel is up
+  std::vector<MuxTunnelConfig> tunnels;
+  std::vector<std::unique_ptr<MuxPort>> ports;
+  std::vector<std::unique_ptr<MuxDest>> dests;
+};
+
 // Settings from [LBSERVER] and the command line, plus the server state
 struct Config {
   // [LBSERVER]
+  RunMode mode = MODE_LB;
   Scheme scheme = LB_RR;
   int use_buffer_cache = 1;
   int buffer_size = 65536;
@@ -191,6 +264,7 @@ struct Config {
   int refactor_scale = 1;
 
   SSLConfig ssl;
+  MuxConfig mux;
 
   // Server state
   std::atomic<bool> accept_clients{true};
@@ -343,6 +417,12 @@ int relay(ClientSocket *s, RelaySide &frontend, RelaySide &backend, int buffer_s
 
 // balance.cpp
 Node *select_node(ClientSocket *s);
+
+// mux.cpp
+int mux_check_config();
+int run_mux_server();
+void mux_wake();
+void mux_stats_report(std::ostream &m);
 
 // server.cpp
 int start_signal_thread();

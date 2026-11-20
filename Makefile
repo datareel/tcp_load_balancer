@@ -108,6 +108,7 @@ test: drlb_server
 	$(PYTHON) tests/ssl_bridge_tests.py $(CURDIR)/drlb_server
 	$(PYTHON) tests/compat_tests.py $(CURDIR)/drlb_server
 	$(PYTHON) tests/pqc_tests.py $(CURDIR)/drlb_server
+	$(PYTHON) tests/mux_tests.py $(CURDIR)/drlb_server
 
 # Print the OpenSSL version of the headers the build uses; fails below 3.5
 openssl-check:

@@ -1,6 +1,6 @@
-# DRLB TCP load balancer 2.0.1 user guide
+# DRLB TCP load balancer 2.2.0 beta 1 user guide
 
-DataReel load balancer (DRLB) 2.0.1, `drlb_server`.
+DataReel load balancer (DRLB) 2.2.0 beta 1, `drlb_server`.
 Copyright (c) 2016-2026 DataReel Software Development.
 Online docs: http://datareel.com/info_drlb.html
 
@@ -33,9 +33,11 @@ Online docs: http://datareel.com/info_drlb.html
 25. [Logging](#logging)
 26. [Statistics](#statistics)
 27. [TLS certificates and settings](#tls-certificates-and-settings)
-28. [Tuning](#tuning)
-29. [Testing](#testing)
-30. [Support](#support)
+28. [Port multiplexer](#port-multiplexer)
+29. [How DRLB compares](#how-drlb-compares)
+30. [Tuning](#tuning)
+31. [Testing](#testing)
+32. [Support](#support)
 
 ## Overview
 
@@ -83,6 +85,9 @@ institutions.
   rotation.
 - **Buffer overflow detection**: close clients that send more data at
   once than the application expects.
+- **Port multiplexer** (2.2, `mode = MUX`): many local TCP and UDP
+  ports carried over one TLS tunnel to a peer DRLB and delivered to
+  their services, in both directions, with load balancing per channel.
 - **systemd services** with a dedicated `drlb` user and sandboxing.
 
 ## Supported platforms
@@ -1513,6 +1518,364 @@ address. If the check fails the node is treated as down, and the error
 is logged. Set `ssl_verify_backend_cert = 0` only for test back ends
 with self-signed certificates.
 
+## Port multiplexer
+
+New in 2.2 (beta). With `mode = MUX` in `[LBSERVER]`, `drlb_server` is
+a port multiplexer: it listens on many local TCP and UDP ports, carries
+every connection and datagram over one TLS tunnel connection to a peer
+DRLB, and the peer delivers each one to the matching service. Only the
+tunnel port has to be open between the two servers, and one
+certificate pair protects every service.
+
+```
+ Server A (mode = MUX)                        Server B (mode = MUX, mux_listen = 1)
+ app1 -> 127.0.0.1:5432/tcp --+                 +--> pg1:5432, pg2:5432 (load balanced)
+ app2 -> 127.0.0.1:6379/tcp --+== one TLS ===>  +--> 127.0.0.1:6379
+ app3 -> 127.0.0.1:514/udp ---+   port 9443     +--> 127.0.0.1:514/udp
+ web  <- 127.0.0.1:80 <-------+<===============-+--- 127.0.0.1:8080/tcp (B to A)
+```
+
+### Why the port multiplexer
+
+DataReel developed the port multiplexer to cut cloud server costs and
+to simplify the network around those servers:
+
+- **One server in place of two or more.** Services that would each
+  need a cloud server of their own, because they use the same port or
+  must be reached separately, share one server. Each service is a
+  channel over one tunnel, delivered to its own process or host at the
+  far end. Example: `mux_consolidate_a.cfg`, `mux_consolidate_b.cfg`.
+- **Smaller firewall rule sets.** Only the tunnel port is open between
+  the sites, however many services are carried. Each new service is a
+  new channel in the config, not a new firewall rule or cloud security
+  group entry. Example: `mux_firewall_a.cfg`, `mux_firewall_b.cfg`.
+- **Encrypts services that are not encrypted.** Every channel rides
+  the tunnel's TLS (TLS 1.3 with post-quantum key exchange on OpenSSL
+  3.5) with certificates checked on both ends, so a service that speaks
+  plain TCP or UDP is protected between the sites without changing it.
+  Example: `mux_encrypt_a.cfg`, `mux_encrypt_b.cfg`.
+- **Standard port numbers for the same service.** Several instances of
+  the same service, for example two databases on 5432, each keep their
+  standard port number: each one is its own channel, delivered to its
+  own host or port at the far end, and on the near end each
+  `[MUXPORT]` can listen on its own address (`127.0.0.2:5432`,
+  `127.0.0.3:5432`). Example: `mux_stdports_a.cfg`, `mux_stdports_b.cfg`.
+- **Virtual hosting for services that have none.** A service that
+  cannot host several sites or tenants on one address and port gets
+  that from DRLB: the channel a client connects to picks the instance
+  that serves it, and DRLB can also load balance each channel over
+  several nodes. Example: `mux_vhost_a.cfg`, `mux_vhost_b.cfg`.
+
+The example configs are in `/usr/share/doc/drlb` (and `etc/` in the
+source). Each pair is server A, which opens the tunnel, and server B,
+which accepts it; see "Example" below for running them.
+
+### Channels, ports and destinations
+
+Each service is a **channel** with a name, for example `postgres`. The
+two servers only have to agree on the names:
+
+- A `[MUXPORT]` is a local port whose connections (TCP) or datagrams
+  (UDP) go through the tunnel to the peer.
+- A `[MUXDEST]` is where a channel that comes from the peer is
+  delivered: one `hostname` and `port`, or a list of `[LBNODE]` names
+  load balanced with a `scheme`.
+
+Both servers can have both, so channels go in either direction over the
+same tunnel. One server connects the tunnel (`[MUXTUNNEL]`), the other
+accepts it (`mux_listen = 1`); after that the direction of the tunnel
+does not matter.
+
+When the tunnel comes up each side lists the channels it delivers. A
+`[MUXPORT]` whose channel the peer does not deliver is logged as a
+WARNING. While no tunnel delivers its channel, a new client of a TCP
+port is held for `mux_hold_secs` (10 by default) and its stream opens
+as soon as a tunnel comes up; what the client sends meanwhile waits in
+the kernel. A client still waiting after `mux_hold_secs` is closed and
+counted as refused. While clients are held, a down tunnel tries again
+every `mux_retry_secs` instead of backing off. Held clients ride out a
+DRLB restart or a short tunnel outage; `mux_hold_secs = 0` closes them
+at once instead (they fail fast). UDP datagrams are dropped while no
+tunnel is up.
+
+### Load balancing and fail over
+
+- On the delivering side, `nodes = pg1, pg2` with `scheme = LB_RR`,
+  `LB_WEIGHTED`, `LB_DISTRIB` or `LB_ASSIGNED` load balances a channel
+  over `[LBNODE]`s, with the same dead node handling as the load
+  balancer (`retries`, `retry_wait`, `dead_node_secs`,
+  `connect_timeout_secs`, node `max_connections`). Weighted and
+  distributed send each connection to the node furthest below its share
+  (`weight`) of the channel's open connections. `LB_ASSIGNED` matches
+  the original client address on the other server against the
+  `rules_config_file` rules, with `assigned_default` as the fall back.
+  Several channels can share nodes.
+- On the sending side, more than one `[MUXTUNNEL]`, or
+  `tunnel_connections` greater than 1, gives more tunnels. New streams
+  are spread round robin over every tunnel that is up and whose peer
+  delivers the channel, so a second DRLB peer is also a fail over
+  path. `peer = NAME` in a `[MUXPORT]` keeps a channel to one peer.
+
+### TCP and UDP
+
+- **TCP**: each client connection is a stream. Data, half close
+  (`shutdown()` of one direction) and resets are carried to the other
+  side. Idle streams are closed after `timeout_secs` when `use_timeout =
+  1`, as connections are in the load balancer; set `use_timeout = 0` or
+  a longer `timeout_secs` for long idle connections such as database
+  pools.
+- **UDP**: each client address and port is a flow with its own socket
+  to the destination, so replies go back to the right client.
+  Datagrams keep their boundaries (one datagram per frame, up to 65,507
+  bytes). A flow ends after `mux_udp_idle_secs` without datagrams.
+  Over a TCP tunnel UDP becomes reliable and ordered, and loss on the
+  network between the servers shows up as delay; syslog, SNMP traps,
+  DNS and similar traffic work well, latency sensitive voice or video
+  is better left off the tunnel.
+
+### Flow control
+
+Each TCP stream has its own window (`mux_stream_window`, 256 KB): a
+side sends no more than the window until the other side has delivered
+the data to its local socket. A service that stops reading stops only
+its own stream; the other streams keep moving. When the tunnel's send
+queue is over `mux_tunnel_buffer`, local TCP sockets are not read until
+it drains below half; UDP datagrams are dropped (and counted) only when
+the queue is over `mux_tunnel_buffer + mux_udp_queue_bytes`. Every
+local socket gets one frame (`mux_frame_size`, 16 KB) per turn, so a
+bulk transfer cannot starve small interactive streams.
+
+The tunnel is one TCP connection, so a lost packet between the servers
+delays all of its streams for a moment (TCP head-of-line blocking).
+`tunnel_connections = 2` or more spreads the streams over several
+connections.
+
+### Security
+
+- The tunnel uses TLS with the same settings and defaults as the SSL
+  bridge (TLS 1.2 minimum, hybrid ML-KEM key exchange first on OpenSSL
+  3.5 builds, the FIPS build on RHEL 8 FIPS hosts). `[SSLCONFIG]` is
+  required.
+- **Mutual TLS**: the accepting server requires a client certificate
+  signed by `ssl_client_ca_list_file` (`ssl_verify_client = 1`). The
+  connecting server sends its `ssl_cert_file` as the client certificate
+  and checks the peer certificate against `ssl_backend_ca_list_file`
+  and the `[MUXTUNNEL]` `remote_host` (or `ssl_hostname`).
+- `mux_allowed_peers` limits which peers may connect: the peer's
+  `mux_peer_name` must be in the list and in the peer's certificate
+  (subjectAltName DNS name or common name).
+- A server only connects to the destinations in its own config, chosen
+  by channel name; nothing the peer sends becomes an address. It is not
+  an open proxy.
+- **Plain TCP**: without an `[SSLCONFIG]` section the config is an
+  error, unless `mux_allow_plain = 1`. Then the tunnel is not encrypted
+  or authenticated, and the server prints and logs a WARNING every time
+  it starts. Use it for tests on one host or inside an already
+  encrypted network only. Both servers must use the same choice.
+
+Make the tunnel certificates with a private CA, one certificate per
+server with its `mux_peer_name` as a subjectAltName DNS name, for
+example:
+
+```
+openssl req -x509 -newkey rsa:3072 -nodes -keyout tunnel_ca.key -out tunnel_ca.crt -days 3650 -subj "/CN=DRLB tunnel CA"
+openssl req -newkey rsa:3072 -nodes -keyout drlb-a.key -out drlb-a.csr -subj "/CN=drlb-a.example.com"
+echo "subjectAltName=DNS:drlb-a.example.com" > drlb-a.ext
+openssl x509 -req -in drlb-a.csr -CA tunnel_ca.crt -CAkey tunnel_ca.key -CAcreateserial -days 825 -extfile drlb-a.ext -out drlb-a.crt
+```
+
+### Example
+
+`/usr/share/doc/drlb/mux_example_a.cfg` and `mux_example_b.cfg` are a
+complete pair: A carries PostgreSQL, Redis and syslog to B, B load
+balances PostgreSQL over two nodes, and B's port 8080 is carried back
+to A's web server. Run each as a templated service, for example
+`systemctl enable --now drlb_server@app_mux` with the config in
+`/etc/drlb/app_mux.cfg`. On B open only the tunnel port:
+
+```
+# firewall-cmd --permanent --new-zone=drlb-tunnel
+# firewall-cmd --permanent --zone=drlb-tunnel --add-source=<server A address>
+# firewall-cmd --permanent --zone=drlb-tunnel --add-port=9443/tcp
+# firewall-cmd --reload
+```
+
+`mux_replication_a.cfg` and `mux_replication_b.cfg` carry the database
+replication of two packages (channels `osa_repl` and `oca_repl`) from
+server A to server B over one tunnel port, 2073, so the firewall
+between the sites needs only 2073/tcp. Each package's replication
+client on A connects to its `[MUXPORT]` on `127.0.0.1`, and B delivers
+each channel to that package's database. The packages keep separate
+streams: a stopped or slow replica of one does not hold up the other.
+Replication connections stay open and may be idle for long periods, so
+these configs set `use_timeout = 0`. The replication ports in the
+examples are placeholders.
+
+Example pairs for each use in "Why the port multiplexer", all in
+`/usr/share/doc/drlb`:
+
+| Use | Server A (opens the tunnel) | Server B (accepts it) | Tunnel port |
+|---|---|---|---|
+| One cloud server in place of two or more | `mux_consolidate_a.cfg` | `mux_consolidate_b.cfg` | 9443 |
+| One open port in place of many firewall rules | `mux_firewall_a.cfg` | `mux_firewall_b.cfg` | 443 |
+| Encryption for services that have none | `mux_encrypt_a.cfg` | `mux_encrypt_b.cfg` | 9443 |
+| Standard port numbers for several instances | `mux_stdports_a.cfg` | `mux_stdports_b.cfg` | 9443 |
+| Virtual hosting for a service that has none | `mux_vhost_a.cfg` | `mux_vhost_b.cfg` | 9443 |
+| Database replication of two packages | `mux_replication_a.cfg` | `mux_replication_b.cfg` | 2073 |
+| PostgreSQL, Redis and syslog, both directions | `mux_example_a.cfg` | `mux_example_b.cfg` | 9443 |
+
+Each pair passes `--check-config` as shipped (after the certificate
+files exist) and was run end to end in the 2.2 tests, with every
+channel delivered.
+
+`[MUXPORT]` ports that only local processes use should listen on
+`127.0.0.1` (`listen_ip_addr`) and need no firewall rule.
+
+### Settings
+
+`[LBSERVER]`:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `mode` | `LB` | `LB` (load balancer) or `MUX` (port multiplexer) |
+| `mux_listen` | `0` | Accept tunnels on `port` and `listen_ip_addr` |
+| `mux_peer_name` | host name | This server's name, sent to peers. Letters, digits, `-`, `_` and `.`, up to 64. |
+| `mux_allowed_peers` | any | Comma separated peer names allowed to connect; each must also be in its certificate |
+| `mux_allow_plain` | `0` | Allow a tunnel without TLS when there is no `[SSLCONFIG]` (WARNING at every start) |
+| `mux_frame_size` | `16384` | Largest TCP data frame, 1024-65535 |
+| `mux_stream_window` | `262144` | Flow control window per TCP stream, 65536-16777216 |
+| `mux_max_streams` | `1024` | Open streams and UDP flows per tunnel, 1-65535 |
+| `mux_tunnel_buffer` | `1048576` | Queued tunnel bytes before local TCP sockets pause |
+| `mux_udp_queue_bytes` | `1048576` | Extra queue for UDP before datagrams are dropped |
+| `mux_udp_idle_secs` | `60` | Idle seconds before a UDP flow ends |
+| `mux_udp_max_flows` | `4096` | UDP flows per `[MUXPORT]` |
+| `mux_keepalive_secs` | `15` | Keepalive interval; a tunnel with no data for 3 intervals is closed |
+| `mux_retry_secs` | `5` | First reconnect wait; it doubles after each failure up to 60 seconds |
+| `mux_hold_secs` | `10` | Seconds a new TCP client waits for a tunnel before it is closed (0 to 300; 0 closes it at once) |
+
+`timeout_secs`/`use_timeout` (idle TCP streams), `connect_timeout_secs`,
+`retries`, `retry_wait`, `dead_node_secs`, `rules_config_file`,
+`resolve_assigned_hostnames`, `somaxconn` and the logging and stats
+settings work as in the load balancer. `scheme`, throttling, HTTP
+forwarding and the buffer settings are not used in MUX mode.
+
+`[MUXTUNNEL]` (a peer to connect to, any number):
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `name` | `remote_host` | Name for logs and stats |
+| `remote_host` | required | Peer host name or address |
+| `remote_port` | required | Peer tunnel port |
+| `tunnel_connections` | `1` | Parallel tunnel connections to this peer, 1-16 |
+| `ssl_hostname` | `remote_host` | Name checked in the peer certificate |
+
+`[MUXPORT]` (a local port carried to a peer):
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `channel` | required | Channel name, unique among the `[MUXPORT]`s |
+| `protocol` | `TCP` | `TCP` or `UDP` |
+| `listen_ip_addr` | all addresses | Local IPv4 address to listen on |
+| `port` | required | Local port |
+| `peer` | any peer | Only use tunnels to the peer with this `mux_peer_name` |
+
+`[MUXDEST]` (where a channel from a peer is delivered):
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `channel` | required | Channel name, unique among the `[MUXDEST]`s (at most 512) |
+| `protocol` | `TCP` | `TCP` or `UDP`; must match the peer's `[MUXPORT]` |
+| `hostname`, `port` | | One destination, or |
+| `nodes` | | Comma separated `[LBNODE]` names |
+| `scheme` | `LB_RR` | `LB_RR`, `LB_WEIGHTED`, `LB_DISTRIB` or `LB_ASSIGNED` for `nodes` |
+| `assigned_default` | `LB_RR` | Fall back for `LB_ASSIGNED`, or `LB_NONE` |
+
+`[SSLCONFIG]` adds:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `ssl_verify_client` | `1` | Tunnel listener: require a client certificate |
+| `ssl_client_ca_list_file` | not set | CAs trusted for client certificates; required with `mux_listen = 1` and `ssl_verify_client = 1` |
+
+### Stats and logs
+
+The stats report adds one line per tunnel (state, peer, open and total
+streams, bytes each way, queued bytes, round trip time), per
+`[MUXPORT]` (streams, refused clients, bytes, dropped datagrams) and per
+`[MUXDEST]` (streams, connect failures, bytes, dropped datagrams). The
+log has every tunnel up and down with the TLS protocol, cipher and key
+exchange group and the peer's channels, refused peers and the reason,
+and with `log_level = 2` every stream open and close.
+
+### Capacity
+
+Defaults follow common stream multiplexing practice: a 256 KB stream
+window, a common default in stream multiplexing libraries, and up to
+1024 open streams per tunnel (HTTP/2 servers typically allow about 100
+to 128 per connection). One
+event loop thread carries all tunnels of a config. In the 2.2 beta
+tests on one 4 core test host (two DRLB processes, TLS 1.3 with
+X25519MLKEM768), one tunnel carried:
+
+- about 2 Gbit/s of TCP echo traffic each way,
+- 8,000 concurrent open TCP streams (with `mux_max_streams = 8192`),
+- more than 50,000 UDP datagrams per second of 200 bytes (the test
+  client's limit).
+
+Each new stream on the delivering side uses a short lived thread for
+the connect, so very high connection rates (thousands of new
+connections per second) are better spread over several DRLB processes
+with their own tunnel ports. Raise the open file limit (see Tuning) for
+more than about 500 streams: each stream uses one socket on each side.
+
+### Wire protocol
+
+The tunnel protocol (DRMX version 1) is described at the top of
+`src/mux.cpp`: a 12 byte frame header (version, type, channel, stream
+id, length, flags) and the frame types HELLO, OPEN, OPEN_OK, OPEN_FAIL,
+DATA, WINDOW, FIN, RST, DGRAM, PING, PONG and GOAWAY. A peer that sends
+a malformed frame, data past its window or anything before HELLO is
+disconnected with the reason in the log. Both servers of a tunnel need
+DRLB 2.2 or later.
+
+## How DRLB compares
+
+DRLB is compared here with kinds of tools, not with named products.
+"Typical" means what tools of that kind usually offer out of the box;
+a given tool may do more with add-ons or extra configuration.
+
+| Feature | DRLB 2.2 | Typical TCP load balancers | Typical TLS wrapper utilities | SSH-style port forwarding | Typical VPNs | Typical tunnel and port multiplexer tools |
+|---|---|---|---|---|---|---|
+| Load balance TCP over back end nodes | Yes: round robin, weighted, distributed, assigned by client address | Yes | No | No | No | Sometimes |
+| Dead node fail over and retries | Yes | Yes | No | No | No | Sometimes |
+| TLS termination and TLS to back ends | Yes, with certificate and host name checks | Usually | Yes | Own protocol, not TLS | Own protocol | Usually TLS |
+| Post-quantum key exchange (hybrid ML-KEM) and ML-DSA certificates | Yes, by default on OpenSSL 3.5 | Varies | Varies | Varies | Varies | Varies |
+| FIPS build on the RHEL 8 validated OpenSSL | Yes (separate package) | Varies | Varies | Through the OS | Varies | Rarely |
+| Many local ports carried over one connection | Yes, named channels | No | One port per tunnel | Yes | Yes (whole network) | Yes |
+| UDP carried, datagram boundaries kept | Yes, per client flow | Sometimes | No | No | Yes | Sometimes |
+| Channels in both directions over one tunnel | Yes | No | No | Yes | Yes | Usually one direction per rule |
+| Load balancing at the far end of a tunnel, per channel | Yes, all four schemes | No | No | No | No | Rarely |
+| Per stream flow control (a slow service only stops its own stream) | Yes | Not applicable | Not applicable | Yes | Not applicable | Varies |
+| Mutual TLS with allowed peer names | Yes | Varies | Varies | Keys per user | Yes | Varies |
+| Reaches only the destinations in its own config | Yes | Yes | Yes | No: any host the remote side can reach, unless restricted | No: the whole routed network | Varies |
+| Needs a network interface, routes or kernel modules | No | No | No | No | Yes | No |
+| Needs user accounts or a shell on the far server | No | No | No | Yes | No | No |
+| Plain TCP only on request, with a warning at every start | Yes | Not applicable | Not applicable | Not applicable | Not applicable | Varies |
+| Runs as an unprivileged sandboxed systemd service, RPMs for RHEL 8, 9 and 10 | Yes | Varies | Varies | Through the OS | Varies | Varies |
+| Dependencies | C++17 standard library, POSIX, OpenSSL | Varies | OpenSSL or similar | The OS | Kernel or driver support | Often a language runtime |
+| X-Forwarded-For for HTTP | Yes | Usually | No | No | No | Sometimes |
+| Log and stats files with rotation | Yes | Usually | Varies | System log | Varies | Varies |
+| License | GPL version 3 or later | Varies | Varies | Varies | Varies | Varies |
+
+When something else fits better:
+
+- For full network access between sites (any host, any port, routing),
+  use a VPN; DRLB carries named services only.
+- For HTTP routing by path, header or cookie, use an HTTP aware proxy;
+  DRLB balances TCP connections.
+- For latency sensitive UDP such as voice or video, send the traffic
+  directly or over a VPN; over a DRLB tunnel, UDP rides on TCP.
+
 ## Tuning
 
 Any change to kernel settings or user limits must be made with care
@@ -1694,16 +2057,18 @@ From the top of the source tree, after `make`:
 $ make test
 ```
 
-This runs three suites against `./drlb_server`:
+This runs five suites against `./drlb_server`:
 
 | Suite | Checks |
 |---|---|
 | `tests/drlb_tests.py` | The 1.60 TCP regression suite: schemes, fail over, HTTP forwarding, large transfers, timeouts, resource exhaustion, shutdown |
 | `tests/ssl_bridge_tests.py` | The 1.60 SSL bridge suite: front end TLS, back end TLS and certificate checks, protocols |
 | `tests/compat_tests.py` | 2.0 checks: config compatibility, the `drlb_ssl_server` name, stats and log files, rotation, signals, limits, throttling |
+| `tests/pqc_tests.py` | Post-quantum TLS: ML-KEM groups, ML-DSA certificates, crypto policy |
+| `tests/mux_tests.py` | 2.2 port multiplexer: TCP and UDP channels both ways, load balancing, 300 concurrent streams, throughput, head-of-line, half close, reconnect, mutual TLS and peer checks, malformed frames, config checks |
 
 The tests start their own back end servers on 127.0.0.1 and use ports
-18000-18299. They need Python 3.7 or later and the `openssl` command.
+18000-18399. They need Python 3.7 or later and the `openssl` command.
 Each check prints PASS or FAIL, and a suite exits non-zero if any check
 fails.
 

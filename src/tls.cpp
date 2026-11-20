@@ -413,8 +413,29 @@ int tls_init()
   }
 #endif
 
-  // Backend client context, shared by all backend connections
-  if(ssl.ssl_encrypt_backend) {
+  // Port multiplexer tunnel listener: peers must present a certificate
+  // signed by ssl_client_ca_list_file (mutual TLS)
+  bool mux = cfg.mode == MODE_MUX;
+  if(mux && cfg.mux.listen) {
+    if(ssl.ssl_verify_client) {
+      if(ssl.ssl_client_ca_list_file.empty() ||
+         SSL_CTX_load_verify_locations(ctx, ssl.ssl_client_ca_list_file.c_str(), nullptr) != 1) {
+        nt_print("ERROR - Cannot load ssl_client_ca_list_file:", ssl.ssl_client_ca_list_file.c_str());
+        nt_print(ssl_error_string());
+        return 1;
+      }
+      SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
+      nt_print("Tunnel peers must present a certificate signed by", ssl.ssl_client_ca_list_file.c_str());
+    }
+    else {
+      nt_print("WARNING - ssl_verify_client = 0: any client can open a tunnel to this server");
+    }
+  }
+
+  // Backend client context, shared by all backend connections. In MUX
+  // mode it is the tunnel client context, with this server's certificate
+  // as the client certificate.
+  if(ssl.ssl_encrypt_backend || mux) {
     SSL_CTX *b = SSL_CTX_new(TLS_client_method());
     if(b && apply_crypto_policy(b, false) != 0) {
       SSL_CTX_free(b);
@@ -441,14 +462,25 @@ int tls_init()
         if(std::filesystem::exists("/etc/pki/tls/certs/ca-bundle.crt"))
           SSL_CTX_load_verify_locations(b, "/etc/pki/tls/certs/ca-bundle.crt", nullptr);
       }
-      nt_print("Backend certificates will be verified");
+      nt_print(mux ? "Tunnel peer certificates will be verified" : "Backend certificates will be verified");
     }
     else {
-      nt_print("WARNING - Backend certificates will not be verified");
+      nt_print(mux ? "WARNING - Tunnel peer certificates will not be verified" : "WARNING - Backend certificates will not be verified");
     }
     if(set_ssl_ciphers(b) != 0) return 1;
     if(set_groups_sigalgs(b) != 0) return 1;
-    nt_print("Backend connections will use SSL/TLS");
+    if(mux) {
+      if(SSL_CTX_use_certificate_chain_file(b, ssl.ssl_cert_file.c_str()) != 1 ||
+         SSL_CTX_use_PrivateKey_file(b, ssl.ssl_key_file.c_str(), SSL_FILETYPE_PEM) != 1) {
+        nt_print("ERROR - Cannot load the tunnel client key and cert");
+        nt_print(ssl_error_string());
+        return 1;
+      }
+      if(!cfg.mux.tunnels.empty()) nt_print("Tunnels to peers will use SSL/TLS");
+    }
+    else {
+      nt_print("Backend connections will use SSL/TLS");
+    }
   }
   return 0;
 }

@@ -69,6 +69,7 @@ src/tls.cpp      OpenSSL contexts and per connection TLS
 src/relay.cpp    poll() based relay and the X-Forwarded-For filter (port of m_relay)
 src/balance.cpp  round robin, weighted, distributed and assigned node selection
 src/server.cpp   accept thread, client threads, signal thread
+src/mux.cpp      2.2 port multiplexer (mode = MUX): DRMX tunnel protocol, epoll event loop
 ```
 
 ## Threads
@@ -135,3 +136,27 @@ builds an AddressSanitizer binary for testing.
 regression suites, run against the new binary, plus
 `tests/compat_tests.py` for 2.0 specific checks (config compatibility,
 the `drlb_ssl_server` name, stats and log files).
+
+## Port multiplexer (2.2)
+
+`mode = MUX` does not use the accept thread or client threads.
+`run_server()` hands over to `run_mux_server()` in `src/mux.cpp`, which
+runs one event loop thread (epoll, level triggered, non-blocking
+sockets and OpenSSL) that owns the tunnels, the `[MUXPORT]` listening
+sockets and every stream socket, so the data path has no locks. Work
+that blocks runs in short worker threads that post a completion to the
+loop through an eventfd: the tunnel TCP connect and TLS handshake (both
+directions) and each destination connect (node selection with retries
+and dead node marking, as in `balance.cpp`, but per `[MUXDEST]`).
+
+Wire protocol DRMX 1: 12 byte header (version, type, channel, stream,
+length, flags), frames HELLO, OPEN, OPEN_OK, OPEN_FAIL, DATA, WINDOW,
+FIN, RST, DGRAM, PING, PONG, GOAWAY. HELLO lists the channels a side
+delivers with the ids the other side puts in OPEN. The connecting side
+opens odd stream ids, the accepting side even ones, so both can open
+streams. TCP streams have credit based flow control per stream; the
+tunnel send queue pauses local TCP reads above `mux_tunnel_buffer` and
+drops UDP above `mux_tunnel_buffer + mux_udp_queue_bytes`. Objects are
+found through a handle table keyed by a 64 bit id in the epoll data,
+and closed objects are freed at the end of each loop turn, so a stale
+event never touches freed memory.

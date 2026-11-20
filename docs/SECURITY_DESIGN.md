@@ -248,6 +248,25 @@ first, so back ends can trust the header. Request bodies with
 found, and headers split across reads are handled. Only requests that
 start with a method in `http_request_strings` are rewritten.
 
+## 7a. Port multiplexer tunnels (2.2 beta) {#mux}
+
+`mode = MUX` carries many local ports over one tunnel to a peer DRLB.
+The tunnel is TLS with the same settings as the SSL bridge, and it is
+mutually authenticated: the accepting server requires a client
+certificate from `ssl_client_ca_list_file`, the connecting server
+checks the peer certificate and host name. `mux_allowed_peers` limits
+peers by name, and the name must be in the peer's certificate. A
+server only connects to the destinations in its own config, chosen by
+channel name, so a peer cannot use it to reach other hosts. Every
+length and count in the frame protocol is checked: frames are at most
+65,535 bytes, a peer that sends past its flow control window, a frame
+before HELLO, a bad version or an unknown frame type is disconnected,
+and streams per tunnel, UDP flows per port, tunnels and handshakes in
+progress are limited. A config without `[SSLCONFIG]` is refused unless
+`mux_allow_plain = 1`, which logs a warning at every start. The tunnel
+code passed the regression suite under AddressSanitizer and
+UndefinedBehaviorSanitizer, including malformed frame tests.
+
 ## 8. Assigned routing and DNS {#assigned}
 
 `LB_ASSIGNED` routes clients to nodes by rules (regular expressions) on

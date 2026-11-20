@@ -301,6 +301,7 @@ void request_stop()
     cfg.kill_server = true;
   }
   cfg.stop_cond.notify_all();
+  mux_wake();
   int fd = wake_fd;
   if(fd >= 0) {
     char c = 1;
@@ -313,6 +314,7 @@ void request_stop()
 // were still running when the process had to exit.
 int run_server()
 {
+  if(cfg.mode == MODE_MUX) return run_mux_server();
   if(start_log_thread() != 0) {
     nt_print("ERROR - Fatal error starting log thread");
     return 1;

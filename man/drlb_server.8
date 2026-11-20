@@ -1,6 +1,6 @@
-.\" DRLB TCP load balancer 2.0.1 manual page
+.\" DRLB TCP load balancer 2.2.0 beta 1 manual page
 .\" Copyright (c) 2016-2026 DataReel Software Development
-.TH drlb_server 8 "18 Nov 2026" "2.0.1" "DRLB TCP Load Balancer"
+.TH drlb_server 8 "20 Nov 2026" "2.2.0-beta1" "DRLB TCP Load Balancer"
 .SH NAME
 drlb_server, drlb_ssl_server \- DRLB TCP and SSL/TLS load balancer
 .SH SYNOPSIS
@@ -38,6 +38,24 @@ prints the OpenSSL in use.
 is a link to
 .BR drlb_server .
 Under that name the config file must have an [SSLCONFIG] section.
+.PP
+With
+.B mode = MUX
+in [LBSERVER] (new in 2.2, beta) the server is a port multiplexer: the
+local TCP and UDP ports in [MUXPORT] sections are carried over one TLS
+tunnel to a peer DRLB ([MUXTUNNEL], or
+.B mux_listen = 1
+to accept tunnels on
+.BR port ),
+and the channels the peer sends are delivered to the destinations in
+[MUXDEST] sections, one host and port or [LBNODE]s with a load
+balancing scheme. Both servers can have both, so channels go in either
+direction. The tunnel uses mutual TLS
+.RB ( ssl_client_ca_list_file );
+a plain tunnel needs
+.B mux_allow_plain = 1
+and logs a warning at every start. See "Port multiplexer" in the user
+guide and the mux_example_a.cfg and mux_example_b.cfg files.
 .SH OPTIONS
 .TP
 .B --help

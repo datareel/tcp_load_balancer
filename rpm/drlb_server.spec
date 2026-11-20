@@ -1,7 +1,7 @@
 BuildArch: x86_64
 Name: drlb_server
-Version: 2.0.1
-Release: 1%{?dist}
+Version: 2.2.0
+Release: 0.beta1%{?dist}
 Summary: DRLB TCP and SSL/TLS load balancer
 Group: System Environment/Daemons
 License: GPL
@@ -57,6 +57,21 @@ tar xf %{drlb_tarball} -C $RPM_BUILD_ROOT
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/README.md"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/RELEASE_NOTES_2.0.txt"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/RELEASE_NOTES_2.0.1.txt"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/RELEASE_NOTES_2.2.0.txt"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/mux_example_a.cfg"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/mux_example_b.cfg"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/mux_replication_a.cfg"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/mux_replication_b.cfg"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/mux_consolidate_a.cfg"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/mux_consolidate_b.cfg"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/mux_firewall_a.cfg"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/mux_firewall_b.cfg"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/mux_encrypt_a.cfg"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/mux_encrypt_b.cfg"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/mux_stdports_a.cfg"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/mux_stdports_b.cfg"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/mux_vhost_a.cfg"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/mux_vhost_b.cfg"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/USER_GUIDE.md"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/SECURITY_DESIGN.md"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/AGENTS.md"
@@ -131,6 +146,14 @@ rm -rf /var/lib/rpm-state/drlb
 exit 0
 
 %changelog
+* Fri Nov 20 2026 Datareel <datareel.com>
+- Version 2.2.0 beta 1
+- Port multiplexer (mode = MUX): many local TCP and UDP ports carried
+  over one TLS tunnel to a peer DRLB and delivered to their services,
+  in both directions, with load balancing per channel ([MUXTUNNEL],
+  [MUXPORT], [MUXDEST]); mutual TLS by default, plain TCP only with
+  mux_allow_plain = 1 and a warning at start
+- New tests/mux_tests.py
 * Wed Nov 18 2026 Datareel <datareel.com>
 - Version 2.0.1
 - RHEL 8 has two packages, like DRCM 1.49: drlb_server (FIPS build,

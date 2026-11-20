@@ -125,8 +125,9 @@ void stats_thread_main()
       << interval % 60 << " secs.\n"
       << "Connections per second: " << server_connection_avg << "\n"
       << "Current connections: " << node_current_connections << "\n"
-      << node_message.str() << "\n"
-      << "END " << cfg.service_name << " stats\n";
+      << node_message.str() << "\n";
+    if(cfg.mode == MODE_MUX) mux_stats_report(m);
+    m << "END " << cfg.service_name << " stats\n";
 
     // An empty stats_file_name only collects connections_per_second
     if(!cfg.stats_file_name.empty()) {

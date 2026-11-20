@@ -17,7 +17,7 @@
 
 namespace drlb {
 
-const char *VersionString = "2.0.1";
+const char *VersionString = "2.2.0-beta1";
 const char *ProgramDescription = "DRLB TCP Load Balancer";
 const char *ProducedBy = "http://datareel.com";
 
@@ -456,7 +456,7 @@ static std::string clean_line(const std::string &raw)
   return line;
 }
 
-enum Section { SEC_NONE, SEC_LBSERVER, SEC_LBNODE, SEC_SSLCONFIG, SEC_OTHER };
+enum Section { SEC_NONE, SEC_LBSERVER, SEC_LBNODE, SEC_SSLCONFIG, SEC_MUXTUNNEL, SEC_MUXPORT, SEC_MUXDEST, SEC_OTHER };
 
 static Section section_of(const std::string &line)
 {
@@ -466,6 +466,9 @@ static Section section_of(const std::string &line)
   if(s.find("[LBSERVER]") != std::string::npos) return SEC_LBSERVER;
   if(s.find("[LBNODE]") != std::string::npos) return SEC_LBNODE;
   if(s.find("[SSLCONFIG]") != std::string::npos) return SEC_SSLCONFIG;
+  if(s.find("[MUXTUNNEL]") != std::string::npos) return SEC_MUXTUNNEL;
+  if(s.find("[MUXPORT]") != std::string::npos) return SEC_MUXPORT;
+  if(s.find("[MUXDEST]") != std::string::npos) return SEC_MUXDEST;
   return SEC_OTHER;
 }
 
@@ -644,6 +647,40 @@ static int set_lbserver(const std::string &name, const std::string &value)
   else if(name == "http_request_strings") cfg.http_request_strings = value;
   else if(name == "http_hdr_str") cfg.http_hdr_str = value;
   else if(name == "http_forward_for_str") cfg.http_forward_for_str = value;
+  else if(name == "mode") {
+    std::string m = to_upper(value);
+    if(m == "LB") cfg.mode = MODE_LB;
+    else if(m == "MUX") cfg.mode = MODE_MUX;
+    else { nt_print("Config file has bad mode value (LB or MUX)", value.c_str()); error_level = 1; }
+  }
+  else if(name.compare(0, 4, "mux_") == 0) {
+    MuxConfig &mx = cfg.mux;
+    auto range = [&](int &var, int lo, int hi) {
+      var = ival;
+      if(ival < lo || ival > hi) {
+        nt_print(("Config file has bad " + name + " value, range " + std::to_string(lo) + " to " + std::to_string(hi)).c_str());
+        error_level = 1;
+      }
+    };
+    if(name == "mux_listen") mx.listen = true_false(value);
+    else if(name == "mux_peer_name") mx.peer_name = value;
+    else if(name == "mux_allow_plain") mx.allow_plain = true_false(value);
+    else if(name == "mux_allowed_peers") {
+      mx.allowed_peers.clear();
+      for(const std::string &p : split(value, ',')) if(!trim(p).empty()) mx.allowed_peers.push_back(trim(p));
+    }
+    else if(name == "mux_frame_size") range(mx.frame_size, 1024, 65535);
+    else if(name == "mux_stream_window") range(mx.stream_window, 65536, 16777216);
+    else if(name == "mux_max_streams") range(mx.max_streams, 1, 65535);
+    else if(name == "mux_tunnel_buffer") range(mx.tunnel_buffer, 65536, 268435456);
+    else if(name == "mux_udp_queue_bytes") range(mx.udp_queue_bytes, 0, 268435456);
+    else if(name == "mux_udp_idle_secs") range(mx.udp_idle_secs, 1, 86400);
+    else if(name == "mux_udp_max_flows") range(mx.udp_max_flows, 1, 1000000);
+    else if(name == "mux_keepalive_secs") range(mx.keepalive_secs, 1, 3600);
+    else if(name == "mux_retry_secs") range(mx.retry_secs, 1, 3600);
+    else if(name == "mux_hold_secs") range(mx.hold_secs, 0, 300);
+    else known = false;
+  }
   else known = false;
 
   if(!known) nt_print("WARNING - Unknown [LBSERVER] setting ignored:", name.c_str());
@@ -702,7 +739,83 @@ static int set_sslconfig(const std::string &name, const std::string &value)
   else if(name == "ssl_sigalgs") ssl.ssl_sigalgs = value;
   else if(name == "ssl_crypto_policy_file") ssl.ssl_crypto_policy_file = value;
   else if(name == "ssl_protocol") ssl.ssl_protocol = value;
+  else if(name == "ssl_verify_client") ssl.ssl_verify_client = true_false(value);
+  else if(name == "ssl_client_ca_list_file") ssl.ssl_client_ca_list_file = value;
   else nt_print("WARNING - Unknown [SSLCONFIG] setting ignored:", name.c_str());
+  return 0;
+}
+
+static int parse_protocol(const std::string &value, int &udp)
+{
+  std::string p = to_upper(value);
+  if(p == "TCP") udp = 0;
+  else if(p == "UDP") udp = 1;
+  else {
+    nt_print("Config file has bad protocol value (TCP or UDP)", value.c_str());
+    return 1;
+  }
+  return 0;
+}
+
+static int parse_port(const std::string &value, int &port, const char *what)
+{
+  port = (int)to_long(value);
+  if(port <= 0 || port > 65535) {
+    nt_print("Config file has bad", what, value.c_str());
+    return 1;
+  }
+  return 0;
+}
+
+static int set_muxtunnel(MuxTunnelConfig &t, const std::string &name, const std::string &value)
+{
+  if(name == "name") t.name = value;
+  else if(name == "remote_host") t.remote_host = value;
+  else if(name == "remote_port") return parse_port(value, t.remote_port, "[MUXTUNNEL] remote_port");
+  else if(name == "tunnel_connections") {
+    t.connections = (int)to_long(value);
+    if(t.connections < 1 || t.connections > 16) {
+      nt_print("Config file has bad tunnel_connections value, range 1 to 16", value.c_str());
+      return 1;
+    }
+  }
+  else if(name == "ssl_hostname") t.ssl_hostname = value;
+  else nt_print("WARNING - Unknown [MUXTUNNEL] setting ignored:", name.c_str());
+  return 0;
+}
+
+static int set_muxport(MuxPort *p, const std::string &name, const std::string &value)
+{
+  if(name == "channel") p->channel = value;
+  else if(name == "protocol") return parse_protocol(value, p->udp);
+  else if(name == "listen_ip_addr") p->listen_ip_addr = value;
+  else if(name == "port") return parse_port(value, p->port, "[MUXPORT] port");
+  else if(name == "peer") p->peer = value;
+  else nt_print("WARNING - Unknown [MUXPORT] setting ignored:", name.c_str());
+  return 0;
+}
+
+static int set_muxdest(MuxDest *d, const std::string &name, const std::string &value)
+{
+  if(name == "channel") d->channel = value;
+  else if(name == "protocol") return parse_protocol(value, d->udp);
+  else if(name == "hostname") d->hostname = value;
+  else if(name == "port") return parse_port(value, d->port, "[MUXDEST] port");
+  else if(name == "nodes") {
+    d->node_names.clear();
+    for(const std::string &n : split(value, ',')) if(!trim(n).empty()) d->node_names.push_back(trim(n));
+  }
+  else if(name == "scheme" || name == "assigned_default") {
+    bool ok;
+    Scheme s = parse_scheme(value, ok);
+    if(!ok || (name == "scheme" && s == LB_NONE) || (name == "assigned_default" && s == LB_ASSIGNED)) {
+      nt_print(("Config file has bad [MUXDEST] " + name + " value").c_str(), value.c_str());
+      return 1;
+    }
+    if(name == "scheme") d->scheme = s;
+    else d->assigned_default = s;
+  }
+  else nt_print("WARNING - Unknown [MUXDEST] setting ignored:", name.c_str());
   return 0;
 }
 
@@ -728,6 +841,8 @@ int load_config_file()
   int has_lbserver = 0, has_scheme = 0, num_ssl_sections = 0;
   Section section = SEC_NONE;
   Node *node = nullptr;
+  MuxPort *mux_port = nullptr;
+  MuxDest *mux_dest = nullptr;
   std::string raw;
   int line_number = 0;
 
@@ -745,6 +860,15 @@ int load_config_file()
         cfg.nodes.push_back(std::make_unique<Node>());
         node = cfg.nodes.back().get();
         node->buffer_size = cfg.buffer_size; // Global size set in [LBSERVER]
+      }
+      if(section == SEC_MUXTUNNEL) cfg.mux.tunnels.emplace_back();
+      if(section == SEC_MUXPORT) {
+        cfg.mux.ports.push_back(std::make_unique<MuxPort>());
+        mux_port = cfg.mux.ports.back().get();
+      }
+      if(section == SEC_MUXDEST) {
+        cfg.mux.dests.push_back(std::make_unique<MuxDest>());
+        mux_dest = cfg.mux.dests.back().get();
       }
       continue;
     }
@@ -773,6 +897,15 @@ int load_config_file()
     else if(section == SEC_SSLCONFIG) {
       if(set_sslconfig(name, value) != 0) error_level = 1;
     }
+    else if(section == SEC_MUXTUNNEL) {
+      if(set_muxtunnel(cfg.mux.tunnels.back(), name, value) != 0) error_level = 1;
+    }
+    else if(section == SEC_MUXPORT) {
+      if(set_muxport(mux_port, name, value) != 0) error_level = 1;
+    }
+    else if(section == SEC_MUXDEST) {
+      if(set_muxdest(mux_dest, name, value) != 0) error_level = 1;
+    }
   }
   if(f.bad()) {
     nt_print("ERROR - A fatal I/O error reading", cfg.config_file.c_str());
@@ -783,7 +916,7 @@ int load_config_file()
     nt_print("Config file missing [LBSERVER] section");
     error_level = 1;
   }
-  if(cfg.nodes.empty()) {
+  if(cfg.nodes.empty() && cfg.mode != MODE_MUX) {
     nt_print("Config file missing [LBNODE] sections");
     error_level = 1;
   }
@@ -992,8 +1125,9 @@ int check_config()
     return error_level;
   }
 
-  nt_print("LB listening port", num(cfg.port).c_str());
-  if(cfg.scheme == LB_DISTRIB) nt_print("Load balancing scheme = LB_DISTRIB");
+  if(cfg.mode != MODE_MUX) nt_print("LB listening port", num(cfg.port).c_str());
+  if(cfg.mode == MODE_MUX) { } // Each [MUXDEST] has its own scheme
+  else if(cfg.scheme == LB_DISTRIB) nt_print("Load balancing scheme = LB_DISTRIB");
   if(cfg.scheme == LB_RR) nt_print("Load balancing scheme = LB_RR");
   if(cfg.scheme == LB_WEIGHTED) nt_print("Load balancing scheme = LB_WEIGHTED");
   if(cfg.scheme == LB_ASSIGNED) {
@@ -1154,7 +1288,7 @@ int check_config()
     nt_print("Verbose mode is disabled");
   }
 
-  nt_print("LB node config");
+  if(cfg.mode != MODE_MUX || !cfg.nodes.empty()) nt_print("LB node config");
   int node_cfg_error_level = 0;
   for(auto &n : cfg.nodes) {
     nt_print("Node name", n->node_name.c_str());
@@ -1277,6 +1411,17 @@ int check_config()
       nt_print(l.node->node_name + " refactored to start with " + num(l.limit) + " backend connections");
     }
     nt_print("Starting with " + num(cfg.refactored_connections) + " refactored connections");
+  }
+
+  if(cfg.mode == MODE_MUX) {
+    if(mux_check_config() != 0) {
+      cfg.verbose = 1;
+      nt_print("ERROR - Port multiplexer configuration error, check your server config file");
+      return 1;
+    }
+  }
+  else if(!cfg.mux.tunnels.empty() || !cfg.mux.ports.empty() || !cfg.mux.dests.empty()) {
+    nt_print("WARNING - [MUXTUNNEL], [MUXPORT] and [MUXDEST] sections are only used with mode = MUX");
   }
 
   // SSL/TLS

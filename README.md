@@ -1,10 +1,25 @@
-# DRLB TCP load balancer 2.0.1
+# DRLB TCP load balancer 2.2.0 beta 1
 
 `drlb_server` is a TCP load balancer for Linux. It accepts connections on
 one port and relays each one to a backend node chosen by round robin,
 weight, load percent or client address rules. A config file with an
 `[SSLCONFIG]` section also terminates SSL/TLS on the frontend (the DRLB
 SSL bridge), with optional TLS to the backend nodes.
+
+Version 2.2 (beta) adds a **port multiplexer** (`mode = MUX`): many
+local TCP and UDP ports, from any number of processes, are carried over
+one TLS tunnel to a peer DRLB, which delivers each channel to its
+service, load balanced over `[LBNODE]`s. Channels go in both
+directions over the same tunnel. It was developed to cut cloud server
+costs (one server in place of two or more), to shrink firewall rule
+sets to one open port, to encrypt services that are not encrypted, to
+let several instances of a service keep their standard port numbers,
+and to give virtual hosting to services that do not offer it. See
+"Port multiplexer" in the user
+guide and the example pairs `etc/mux_*_a.cfg`, `etc/mux_*_b.cfg`. "How DRLB compares" in the
+user guide compares DRLB with the kinds of tools it overlaps (TCP load
+balancers, TLS wrappers, SSH-style port forwarding, VPNs, tunnel and
+port multiplexer tools), without naming products.
 
 Version 2.0 combines the 1.60/1.61 **load-balancer** (`drlb_server`)
 and **ssl-bridge** (`drlb_ssl_server`) packages in one program. It is
@@ -71,16 +86,16 @@ CMake also works: `cmake -S . -B build-cmake && cmake --build build-cmake`.
 ## RPM
 
 Build the RPM on the RHEL version it is for (also needs `rpm-build`).
-The RPMs are `drlb_server-2.0.1-1.el9` and `.el10` (system OpenSSL 3.5),
-and on RHEL 8 either `drlb_server-2.0.1-1.el8` (FIPS build, system
-OpenSSL 1.1.1) or `drlb_server-openssl35-2.0.1-1.el8` (OpenSSL 3.5 built
+The RPMs are `drlb_server-2.2.0-0.beta1.el9` and `.el10` (system OpenSSL
+3.5), and on RHEL 8 either `drlb_server-2.2.0-0.beta1.el8` (FIPS build,
+system OpenSSL 1.1.1) or `drlb_server-openssl35-2.2.0-0.beta1.el8` (OpenSSL 3.5 built
 in, post-quantum TLS; `./make_rpm_package.sh rhel8-openssl35` after
 `./build_openssl35.sh`). `dnf swap` moves a RHEL 8 host between the two:
 
 ```
 cd rpm
 ./make_rpm_package.sh rhel10      # or rhel9, rhel8
-sudo dnf -y install ~/rpmbuild/RPMS/x86_64/drlb_server-2.0.1-*.el10.x86_64.rpm
+sudo dnf -y install ~/rpmbuild/RPMS/x86_64/drlb_server-2.2.0-*.el10.x86_64.rpm
 ```
 
 ## Running
@@ -130,8 +145,9 @@ make test                    # RHEL 8: make test PYTHON=python3.11
 ```
 
 runs `tests/drlb_tests.py` and `tests/ssl_bridge_tests.py` (the 1.60
-regression suites), `tests/compat_tests.py` and `tests/pqc_tests.py`
-(post-quantum TLS; FIPS checks on a FIPS build) against `./drlb_server`.
+regression suites), `tests/compat_tests.py`, `tests/pqc_tests.py`
+(post-quantum TLS; FIPS checks on a FIPS build) and `tests/mux_tests.py`
+(the 2.2 port multiplexer) against `./drlb_server`.
 They need Python 3.7 or later and the `openssl` command (3.5 or later for
 `pqc_tests.py`) and use local ports 18000-18399. `tests/load/run_load_tests.py` runs the load and
 stress tests (needs `ab` and matplotlib).

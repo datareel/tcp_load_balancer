@@ -1758,7 +1758,7 @@ channel delivered.
 | `mux_udp_queue_bytes` | `1048576` | Extra queue for UDP before datagrams are dropped |
 | `mux_udp_idle_secs` | `60` | Idle seconds before a UDP flow ends |
 | `mux_udp_max_flows` | `4096` | UDP flows per `[MUXPORT]` |
-| `mux_keepalive_secs` | `15` | Keepalive interval; a tunnel with no data for 3 intervals is closed |
+| `mux_keepalive_secs` | `15` | Keepalive interval; a tunnel with no data for 3 intervals is closed, and the log line has the socket's TCP state |
 | `mux_retry_secs` | `5` | First reconnect wait; it doubles after each failure up to 60 seconds |
 | `mux_hold_secs` | `10` | Seconds a new TCP client waits for a tunnel before it is closed (0 to 300; 0 closes it at once) |
 
@@ -1829,6 +1829,15 @@ TCP clients wait up to `mux_hold_secs` for it. A lower
 15 seconds; a higher one rides out short network drops without closing
 the tunnel. Each peer's own setting decides when that peer closes the
 tunnel.
+
+```
+closed: no data from the peer for 46 secs (network or peer down), tcp: retransmits 6 (total 9), rto 25600 ms, unacked 3, last recv 46012 ms ago, last ack 45980 ms ago, rtt 43 ms, queued 0 (1 streams reset)
+```
+
+The log line also has the socket's TCP state. Retransmits, a backed off
+rto and unacked data mean the network path to the peer was lost (both
+ends usually log it); no retransmits and no unacked data mean the peer
+itself stopped answering.
 
 ### Capacity
 

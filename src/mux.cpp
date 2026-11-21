@@ -1537,6 +1537,25 @@ void make_report()
   tunnel_report = m.str();
 }
 
+// TCP state of a tunnel socket for the log when the keepalive gives up:
+// tells a dead network path (retransmits, backed off RTO, unacked data)
+// from a peer that stopped answering.
+std::string tcp_state(Tunnel *t)
+{
+  std::ostringstream o;
+  struct tcp_info ti;
+  socklen_t len = sizeof(ti);
+  memset(&ti, 0, sizeof(ti));
+  if(getsockopt(t->fd, IPPROTO_TCP, TCP_INFO, &ti, &len) == 0) {
+    o << ", tcp: retransmits " << (unsigned)ti.tcpi_retransmits << " (total " << ti.tcpi_total_retrans
+      << "), rto " << ti.tcpi_rto / 1000 << " ms, unacked " << ti.tcpi_unacked
+      << ", last recv " << ti.tcpi_last_data_recv << " ms ago, last ack " << ti.tcpi_last_ack_recv
+      << " ms ago, rtt " << ti.tcpi_rtt / 1000 << " ms";
+  }
+  o << ", queued " << t->out_size();
+  return o.str();
+}
+
 void timers()
 {
   time_t now = time(nullptr);
@@ -1565,7 +1584,7 @@ void timers()
       continue;
     }
     if(now - t->last_rx > 3 * cfg.mux.keepalive_secs) {
-      close_tunnel(t, "no data from the peer for " + std::to_string(now - t->last_rx) + " secs (network or peer down)");
+      close_tunnel(t, "no data from the peer for " + std::to_string(now - t->last_rx) + " secs (network or peer down)" + tcp_state(t));
       continue;
     }
     if(now - t->last_ping >= cfg.mux.keepalive_secs) {

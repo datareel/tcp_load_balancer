@@ -487,10 +487,13 @@ def test_silent_peer():
     t0 = time.time()
     try:
         seen = wait_for(lambda: read(log).count('(network or peer down)') > before, 15)
+        state = re.search(r'\(network or peer down\), tcp: retransmits \d+ \(total \d+\), rto \d+ ms, unacked \d+, '
+                          r'last recv \d+ ms ago, last ack \d+ ms ago, rtt \d+ ms, queued \d+', read(log)) is not None
     finally:
         took = time.time() - t0
         proc_b.proc.send_signal(signal.SIGCONT)
-    check('A closes a tunnel whose peer stops answering, naming a network or peer loss', seen and 4 < took < 12, '%.1f secs' % took)
+    check('A closes a tunnel whose peer stops answering, naming a network or peer loss and the TCP state',
+          seen and state and 4 < took < 12, '%.1f secs, tcp state %s' % (took, 'logged' if state else 'missing'))
     check('A reconnects when the peer answers again', tunnel_up())
 
 

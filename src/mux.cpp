@@ -1565,7 +1565,7 @@ void timers()
       continue;
     }
     if(now - t->last_rx > 3 * cfg.mux.keepalive_secs) {
-      close_tunnel(t, "no data from the peer for " + std::to_string(now - t->last_rx) + " secs");
+      close_tunnel(t, "no data from the peer for " + std::to_string(now - t->last_rx) + " secs (network or peer down)");
       continue;
     }
     if(now - t->last_ping >= cfg.mux.keepalive_secs) {

@@ -1816,6 +1816,20 @@ log has every tunnel up and down with the TLS protocol, cipher and key
 exchange group and the peer's channels, refused peers and the reason,
 and with `log_level = 2` every stream open and close.
 
+A tunnel that receives nothing for 3 keepalive intervals is closed,
+because the network path or the peer is down: with the default
+`mux_keepalive_secs = 15`, an outage of about 45 seconds closes it, and
+the log says `closed: no data from the peer for N secs (network or peer
+down)`. Each peer sends a keepalive every interval and the other side
+answers it, so a busy or idle tunnel never closes this way while the
+path works. The connecting side then reconnects after `mux_retry_secs`
+(doubling up to 60 seconds while the peer stays unreachable), and new
+TCP clients wait up to `mux_hold_secs` for it. A lower
+`mux_keepalive_secs` (for example 5) detects an outage sooner, in about
+15 seconds; a higher one rides out short network drops without closing
+the tunnel. Each peer's own setting decides when that peer closes the
+tunnel.
+
 ### Capacity
 
 Defaults follow common stream multiplexing practice: a 256 KB stream
@@ -2074,7 +2088,7 @@ This runs five suites against `./drlb_server`:
 | `tests/ssl_bridge_tests.py` | The 1.60 SSL bridge suite: front end TLS, back end TLS and certificate checks, protocols |
 | `tests/compat_tests.py` | 2.0 checks: config compatibility, the `drlb_ssl_server` name, stats and log files, rotation, signals, limits, throttling |
 | `tests/pqc_tests.py` | Post-quantum TLS: ML-KEM groups, ML-DSA certificates, crypto policy |
-| `tests/mux_tests.py` | 2.2 port multiplexer: TCP and UDP channels both ways, load balancing, 300 concurrent streams, throughput, head-of-line, half close, reconnect, mutual TLS and peer checks, malformed frames, config checks |
+| `tests/mux_tests.py` | 2.2 port multiplexer: TCP and UDP channels both ways, load balancing, 300 concurrent streams, throughput, head-of-line, half close, reconnect, keepalive timeout, mutual TLS and peer checks, malformed frames, config checks |
 
 The tests start their own back end servers on 127.0.0.1 and use ports
 18000-18399. They need Python 3.7 or later and the `openssl` command.

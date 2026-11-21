@@ -478,6 +478,22 @@ def test_reconnect(b_cfg):
     check('A reconnects when B is back', tunnel_up())
 
 
+def test_silent_peer():
+    # A peer that stops answering (its process stopped, as when the network path is lost) is detected after
+    # 3 keepalive intervals (mux_keepalive_secs = 2 here), and A reconnects when the peer answers again
+    log = os.path.join(WORK, 'drlb-a.log')
+    before = read(log).count('(network or peer down)')
+    proc_b.proc.send_signal(signal.SIGSTOP)
+    t0 = time.time()
+    try:
+        seen = wait_for(lambda: read(log).count('(network or peer down)') > before, 15)
+    finally:
+        took = time.time() - t0
+        proc_b.proc.send_signal(signal.SIGCONT)
+    check('A closes a tunnel whose peer stops answering, naming a network or peer loss', seen and 4 < took < 12, '%.1f secs' % took)
+    check('A reconnects when the peer answers again', tunnel_up())
+
+
 def config_peer(name, cert, peer_name):
     lines = lbserver(name, [])
     lines = [l if not l.startswith('mux_peer_name') else 'mux_peer_name = ' + peer_name for l in lines]
@@ -621,6 +637,7 @@ def main():
         test_udp_idle()
         test_stats(proc_a, proc_b)
         test_reconnect(b_cfg)
+        test_silent_peer()
         test_tls_checks()
         test_protocol_errors()
     finally:

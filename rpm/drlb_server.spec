@@ -1,7 +1,7 @@
 BuildArch: x86_64
 Name: drlb_server
 Version: 2.2.0
-Release: 0.beta1%{?dist}
+Release: 1%{?dist}
 Summary: DRLB TCP and SSL/TLS load balancer
 Group: System Environment/Daemons
 License: GPL
@@ -146,6 +146,11 @@ rm -rf /var/lib/rpm-state/drlb
 exit 0
 
 %changelog
+* Sat Nov 21 2026 Datareel <datareel.com>
+- Version 2.2.0 (release of 2.2.0 beta 1)
+- The replication example pair (mux_replication_a.cfg, mux_replication_b.cfg)
+  is the config that carries the OSA and OCA database replication in
+  production, with the names, addresses and paths changed
 * Fri Nov 20 2026 Datareel <datareel.com>
 - Version 2.2.0 beta 1
 - Port multiplexer (mode = MUX): many local TCP and UDP ports carried

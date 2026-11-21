@@ -6,7 +6,7 @@ tells an AI agent (Gemini CLI, Claude Code, GitHub Copilot, Codex and
 others) how to assist a site's own system administrators and developers
 to install DRLB, set up a load balancer or an SSL bridge, upgrade older
 releases (the 1.6x load-balancer and ssl-bridge packages, or 2.0) to the
-current release, 2.2.0-beta1, maintain a fork, and troubleshoot. The agent
+current release, 2.2.0, maintain a fork, and troubleshoot. The agent
 assists; it does not replace the administrators or DataReel support, and
 it never acts autonomously (section 0). The administrators review and
 approve every step, and problems the agent cannot solve go to DataReel
@@ -133,12 +133,11 @@ must have an `[SSLCONFIG]` section. Release 2.0 replaced the 1.6x
 load-balancer and ssl-bridge packages (the LDM load balancer stays in
 the `legacy_drlb` repository).
 
-**2.2 beta: port multiplexer.** A config with `mode = MUX` carries local
+**2.2: port multiplexer.** A config with `mode = MUX` carries local
 TCP and UDP ports (`[MUXPORT]`) over one TLS tunnel to a peer DRLB
 (`[MUXTUNNEL]`, or `mux_listen = 1` on the peer) and delivers the peer's
-channels to local services (`[MUXDEST]`). It is a beta: use it on test
-systems unless the administrators decide otherwise. Both servers of a
-tunnel need 2.2. The same rules apply (rule 6: do not set
+channels to local services (`[MUXDEST]`). It is new in 2.2: try it on a
+test system first. Both servers of a tunnel need 2.2. The same rules apply (rule 6: do not set
 `mux_allow_plain = 1`, `ssl_verify_client = 0` or
 `ssl_verify_backend_cert = 0` on real systems to make a tunnel connect;
 report instead). Tunnel problems: the log has every tunnel up and down
@@ -146,7 +145,7 @@ with the reason, refused peers and certificate check errors; the stats
 file has one line per tunnel, port and channel. User guide: "Port
 multiplexer".
 
-| Item | Location (2.2.0-beta1) |
+| Item | Location (2.2.0) |
 | --- | --- |
 | Program | `/usr/sbin/drlb_server`, `/usr/sbin/drlb_ssl_server` (link) |
 | Configs | `/etc/drlb/*.cfg`; `active_configs.list` lists the ones `drlb_server.service` runs; `ssl_bridge.cfg` for `drlb_ssl_server.service` |
@@ -157,7 +156,7 @@ multiplexer".
 | Logs and stats | `/var/log/drlb/` (owned by the `drlb` user), `journalctl -u drlb_server` |
 | Service user | `drlb`, with systemd sandboxing and only `CAP_NET_BIND_SERVICE` |
 
-RPMs per OS (2.2.0-beta1):
+RPMs per OS (2.2.0):
 
 | OS | Package | OpenSSL | TLS |
 | --- | --- | --- | --- |
@@ -210,9 +209,9 @@ Manual: "Installing from RPM", "Quick start", "Running as a service" and
    post-quantum TLS on every other host.
 2. Download the RPM and its `.sha256sum` from
    https://datareel.com/downloads/drlb/ and check it:
-   `sha256sum -c drlb_server-2.2.0-0.beta1.el9.x86_64.rpm.sha256sum`. Stop if it
+   `sha256sum -c drlb_server-2.2.0-1.el9.x86_64.rpm.sha256sum`. Stop if it
    fails.
-3. `dnf -y install ./drlb_server-2.2.0-0.beta1.el9.x86_64.rpm` (one server at a
+3. `dnf -y install ./drlb_server-2.2.0-1.el9.x86_64.rpm` (one server at a
    time, rule 1). RHEL 8 hosts need NetworkManager and firewalld.
 4. Write the config from `/etc/drlb/http_rr_test.cfg`, `ssl_bridge.cfg` or
    `/usr/share/doc/drlb/example_config.cfg`. For the SSL bridge the person
@@ -224,7 +223,7 @@ Manual: "Installing from RPM", "Quick start", "Running as a service" and
    `drlb_server@NAME`, then `systemctl enable --now` the service. Check
    `systemctl status` and the log.
 
-## 5. AI-assisted upgrade to 2.2.0-beta1
+## 5. AI-assisted upgrade to 2.2.0
 
 ### 5.1 What changes, and what does not
 
@@ -240,7 +239,7 @@ Manual: "Installing from RPM", "Quick start", "Running as a service" and
   crypto policy lists). On RHEL 8, `dnf upgrade` from 2.0 lands on the
   FIPS build `drlb_server` (system OpenSSL 1.1.1, classic TLS, same as
   2.0 on RHEL 8). For post-quantum TLS on a host not in FIPS mode, the
-  person then runs `dnf swap drlb_server ./drlb_server-openssl35-2.2.0-0.beta1.el8.x86_64.rpm`
+  person then runs `dnf swap drlb_server ./drlb_server-openssl35-2.2.0-1.el8.x86_64.rpm`
   as a separate, approved step.
 - **From 1.60, 1.61 or 1.62 (load-balancer and ssl-bridge):** one 2.2.0
   RPM replaces both old RPMs (it obsoletes `drlb_ssl_server` < 2.0).

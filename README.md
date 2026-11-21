@@ -1,4 +1,4 @@
-# DRLB TCP load balancer 2.2.0 beta 1
+# DRLB TCP load balancer 2.2.0
 
 `drlb_server` is a TCP load balancer for Linux. It accepts connections on
 one port and relays each one to a backend node chosen by round robin,
@@ -6,7 +6,7 @@ weight, load percent or client address rules. A config file with an
 `[SSLCONFIG]` section also terminates SSL/TLS on the frontend (the DRLB
 SSL bridge), with optional TLS to the backend nodes.
 
-Version 2.2 (beta) adds a **port multiplexer** (`mode = MUX`): many
+Version 2.2 adds a **port multiplexer** (`mode = MUX`): many
 local TCP and UDP ports, from any number of processes, are carried over
 one TLS tunnel to a peer DRLB, which delivers each channel to its
 service, load balanced over `[LBNODE]`s. Channels go in both
@@ -86,9 +86,9 @@ CMake also works: `cmake -S . -B build-cmake && cmake --build build-cmake`.
 ## RPM
 
 Build the RPM on the RHEL version it is for (also needs `rpm-build`).
-The RPMs are `drlb_server-2.2.0-0.beta1.el9` and `.el10` (system OpenSSL
-3.5), and on RHEL 8 either `drlb_server-2.2.0-0.beta1.el8` (FIPS build,
-system OpenSSL 1.1.1) or `drlb_server-openssl35-2.2.0-0.beta1.el8` (OpenSSL 3.5 built
+The RPMs are `drlb_server-2.2.0-1.el9` and `.el10` (system OpenSSL
+3.5), and on RHEL 8 either `drlb_server-2.2.0-1.el8` (FIPS build,
+system OpenSSL 1.1.1) or `drlb_server-openssl35-2.2.0-1.el8` (OpenSSL 3.5 built
 in, post-quantum TLS; `./make_rpm_package.sh rhel8-openssl35` after
 `./build_openssl35.sh`). `dnf swap` moves a RHEL 8 host between the two:
 

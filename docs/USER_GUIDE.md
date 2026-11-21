@@ -1,6 +1,6 @@
-# DRLB TCP load balancer 2.2.0 beta 1 user guide
+# DRLB TCP load balancer 2.2.0 user guide
 
-DataReel load balancer (DRLB) 2.2.0 beta 1, `drlb_server`.
+DataReel load balancer (DRLB) 2.2.0, `drlb_server`.
 Copyright (c) 2016-2026 DataReel Software Development.
 Online docs: http://datareel.com/info_drlb.html
 
@@ -1520,7 +1520,7 @@ with self-signed certificates.
 
 ## Port multiplexer
 
-New in 2.2 (beta). With `mode = MUX` in `[LBSERVER]`, `drlb_server` is
+New in 2.2. With `mode = MUX` in `[LBSERVER]`, `drlb_server` is
 a port multiplexer: it listens on many local TCP and UDP ports, carries
 every connection and datagram over one TLS tunnel connection to a peer
 DRLB, and the peer delivers each one to the matching service. Only the
@@ -1708,8 +1708,17 @@ client on A connects to its `[MUXPORT]` on `127.0.0.1`, and B delivers
 each channel to that package's database. The packages keep separate
 streams: a stopped or slow replica of one does not hold up the other.
 Replication connections stay open and may be idle for long periods, so
-these configs set `use_timeout = 0`. The replication ports in the
-examples are placeholders.
+these configs set `use_timeout = 0`, and server A sets
+`mux_hold_secs = 30` so a replication client that reconnects while the
+tunnel is down waits for it. This pair is the config that carries the
+OSA and OCA replication (DataReel gxObjRepl) in production, with the
+names, addresses and paths changed. Server A's `remote_host` is server
+B's IP address, so server B's tunnel certificate has that address in
+its subjectAltName (or set `ssl_hostname` in `[MUXTUNNEL]` to a name in
+the certificate). The replication copies check their own certificates
+against the address the primary connects to, `127.0.0.1`, so the copy
+certificates need `IP:127.0.0.1` in their subjectAltName; they are
+separate from the tunnel certificates.
 
 Example pairs for each use in "Why the port multiplexer", all in
 `/usr/share/doc/drlb`:
@@ -1813,7 +1822,7 @@ Defaults follow common stream multiplexing practice: a 256 KB stream
 window, a common default in stream multiplexing libraries, and up to
 1024 open streams per tunnel (HTTP/2 servers typically allow about 100
 to 128 per connection). One
-event loop thread carries all tunnels of a config. In the 2.2 beta
+event loop thread carries all tunnels of a config. In the 2.2
 tests on one 4 core test host (two DRLB processes, TLS 1.3 with
 X25519MLKEM768), one tunnel carried:
 

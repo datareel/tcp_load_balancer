@@ -1,5 +1,16 @@
-DRLB 2.2.0 beta 1 release notes
-DRLB TCP load balancer, 11/20/2026
+DRLB 2.2.0 release notes
+DRLB TCP load balancer, 11/21/2026 (2.2.0 beta 1: 11/20/2026)
+
+Changes since 2.2.0 beta 1
+--------------------------
+* The replication example pair, mux_replication_a.cfg and
+  mux_replication_b.cfg, is now the config that carries the OSA and OCA
+  database replication (DataReel gxObjRepl) in production between an on
+  site server and a cloud standby, with the names, addresses and paths
+  changed. The comments explain the certificate names the tunnel and
+  the replication copies need.
+* No program changes: 2.2.0 is the 2.2.0 beta 1 program with version
+  2.2.0.
 
 Port multiplexer (mode = MUX)
 -----------------------------
@@ -71,8 +82,8 @@ Tests
 
 Packaging
 ---------
-* drlb_server-2.2.0-0.beta1 (RPM Release 0.beta1, so 2.2.0-1 will
-  upgrade it). --version prints 2.2.0-beta1.
-* Known limits of the beta: IPv4 only (as the load balancer); TLS to
+* drlb_server-2.2.0-1 (upgrades 2.2.0-0.beta1). --version prints
+  2.2.0.
+* Known limits: IPv4 only (as the load balancer); TLS to
   the destinations (ssl_encrypt_backend) is not used in MUX mode; each
   new stream on the delivering side uses a short lived connect thread.

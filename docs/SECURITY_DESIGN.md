@@ -248,7 +248,7 @@ first, so back ends can trust the header. Request bodies with
 found, and headers split across reads are handled. Only requests that
 start with a method in `http_request_strings` are rewritten.
 
-## 7a. Port multiplexer tunnels (2.2 beta) {#mux}
+## 7a. Port multiplexer tunnels (2.2) {#mux}
 
 `mode = MUX` carries many local ports over one tunnel to a peer DRLB.
 The tunnel is TLS with the same settings as the SSL bridge, and it is

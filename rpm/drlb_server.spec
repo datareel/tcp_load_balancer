@@ -1,6 +1,6 @@
 BuildArch: x86_64
 Name: drlb_server
-Version: 2.2.0
+Version: 2.2.1
 Release: 1%{?dist}
 Summary: DRLB TCP and SSL/TLS load balancer
 Group: System Environment/Daemons
@@ -58,6 +58,7 @@ tar xf %{drlb_tarball} -C $RPM_BUILD_ROOT
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/RELEASE_NOTES_2.0.txt"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/RELEASE_NOTES_2.0.1.txt"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/RELEASE_NOTES_2.2.0.txt"
+%doc %attr(0644, root, root) "/usr/share/doc/drlb/RELEASE_NOTES_2.2.1.txt"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/mux_example_a.cfg"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/mux_example_b.cfg"
 %doc %attr(0644, root, root) "/usr/share/doc/drlb/mux_replication_a.cfg"
@@ -146,6 +147,15 @@ rm -rf /var/lib/rpm-state/drlb
 exit 0
 
 %changelog
+* Sat Nov 21 2026 Datareel <datareel.com>
+- Version 2.2.1
+- MUX: a tunnel closed by the keepalive timeout logs "(network or peer
+  down)" and the socket's TCP state (retransmits, rto, unacked, last
+  receive and ack, rtt, queued)
+- User guide: the keepalive timeout, reconnect and how to read the TCP
+  state
+- tests/mux_tests.py: a peer that stops answering is closed and A
+  reconnects
 * Sat Nov 21 2026 Datareel <datareel.com>
 - Version 2.2.0 (release of 2.2.0 beta 1)
 - The replication example pair (mux_replication_a.cfg, mux_replication_b.cfg)

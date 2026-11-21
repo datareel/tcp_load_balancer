@@ -1,6 +1,6 @@
-# DRLB TCP load balancer 2.2.0 user guide
+# DRLB TCP load balancer 2.2.1 user guide
 
-DataReel load balancer (DRLB) 2.2.0, `drlb_server`.
+DataReel load balancer (DRLB) 2.2.1, `drlb_server`.
 Copyright (c) 2016-2026 DataReel Software Development.
 Online docs: http://datareel.com/info_drlb.html
 

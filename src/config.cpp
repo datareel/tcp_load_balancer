@@ -17,7 +17,7 @@
 
 namespace drlb {
 
-const char *VersionString = "2.2.0";
+const char *VersionString = "2.2.1";
 const char *ProgramDescription = "DRLB TCP Load Balancer";
 const char *ProducedBy = "http://datareel.com";
 

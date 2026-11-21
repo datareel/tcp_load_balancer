@@ -1,6 +1,6 @@
 # DRLB security design
 
-**Release:** 2.0.1 (`drlb_server`, with `drlb_ssl_server` as a link), and
+**Release:** 2.2.1 (`drlb_server`, with `drlb_ssl_server` as a link), and
 the legacy packages built on the DataReel library (load-balancer and
 ssl-bridge 1.6x, LDM-load-balancer 1.6x) where noted.
 **Audience:** security reviewers, administrators and anyone deciding

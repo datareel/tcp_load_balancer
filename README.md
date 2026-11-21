@@ -1,4 +1,4 @@
-# DRLB TCP load balancer 2.2.0
+# DRLB TCP load balancer 2.2.1
 
 `drlb_server` is a TCP load balancer for Linux. It accepts connections on
 one port and relays each one to a backend node chosen by round robin,
@@ -86,16 +86,16 @@ CMake also works: `cmake -S . -B build-cmake && cmake --build build-cmake`.
 ## RPM
 
 Build the RPM on the RHEL version it is for (also needs `rpm-build`).
-The RPMs are `drlb_server-2.2.0-1.el9` and `.el10` (system OpenSSL
-3.5), and on RHEL 8 either `drlb_server-2.2.0-1.el8` (FIPS build,
-system OpenSSL 1.1.1) or `drlb_server-openssl35-2.2.0-1.el8` (OpenSSL 3.5 built
+The RPMs are `drlb_server-2.2.1-1.el9` and `.el10` (system OpenSSL
+3.5), and on RHEL 8 either `drlb_server-2.2.1-1.el8` (FIPS build,
+system OpenSSL 1.1.1) or `drlb_server-openssl35-2.2.1-1.el8` (OpenSSL 3.5 built
 in, post-quantum TLS; `./make_rpm_package.sh rhel8-openssl35` after
 `./build_openssl35.sh`). `dnf swap` moves a RHEL 8 host between the two:
 
 ```
 cd rpm
 ./make_rpm_package.sh rhel10      # or rhel9, rhel8
-sudo dnf -y install ~/rpmbuild/RPMS/x86_64/drlb_server-2.2.0-*.el10.x86_64.rpm
+sudo dnf -y install ~/rpmbuild/RPMS/x86_64/drlb_server-2.2.1-*.el10.x86_64.rpm
 ```
 
 ## Running

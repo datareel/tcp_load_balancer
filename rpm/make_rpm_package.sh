@@ -91,7 +91,7 @@ install -d -m 0755 "${STAGE}/usr/libexec/drlb" "${STAGE}/usr/lib/systemd/system"
 install -m 0755 systemd/drlb_platform_check systemd/drlb_server_ctl "${STAGE}/usr/libexec/drlb/"
 install -m 0644 systemd/drlb_server.service systemd/drlb_server@.service \
     systemd/drlb_ssl_server.service "${STAGE}/usr/lib/systemd/system/"
-install -m 0644 README.md RELEASE_NOTES_2.0.txt RELEASE_NOTES_2.0.1.txt RELEASE_NOTES_2.2.0.txt COPYING version.txt etc/example_config.cfg etc/mux_example_a.cfg etc/mux_example_b.cfg etc/mux_replication_a.cfg etc/mux_replication_b.cfg etc/mux_consolidate_a.cfg etc/mux_consolidate_b.cfg etc/mux_firewall_a.cfg etc/mux_firewall_b.cfg etc/mux_encrypt_a.cfg etc/mux_encrypt_b.cfg etc/mux_stdports_a.cfg etc/mux_stdports_b.cfg etc/mux_vhost_a.cfg etc/mux_vhost_b.cfg \
+install -m 0644 README.md RELEASE_NOTES_2.0.txt RELEASE_NOTES_2.0.1.txt RELEASE_NOTES_2.2.0.txt RELEASE_NOTES_2.2.1.txt COPYING version.txt etc/example_config.cfg etc/mux_example_a.cfg etc/mux_example_b.cfg etc/mux_replication_a.cfg etc/mux_replication_b.cfg etc/mux_consolidate_a.cfg etc/mux_consolidate_b.cfg etc/mux_firewall_a.cfg etc/mux_firewall_b.cfg etc/mux_encrypt_a.cfg etc/mux_encrypt_b.cfg etc/mux_stdports_a.cfg etc/mux_stdports_b.cfg etc/mux_vhost_a.cfg etc/mux_vhost_b.cfg \
     docs/USER_GUIDE.md docs/SECURITY_DESIGN.md AGENTS.md CLAUDE.md GEMINI.md "${STAGE}/usr/share/doc/drlb/"
 gzip -9 -n -c man/drlb_server.8 > "${STAGE}/usr/share/man/man8/drlb_server.8.gz"
 gzip -9 -n -c man/drlb_ssl_server.8 > "${STAGE}/usr/share/man/man8/drlb_ssl_server.8.gz"

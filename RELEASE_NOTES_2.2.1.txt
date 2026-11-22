@@ -1,5 +1,6 @@
 DRLB 2.2.1 release notes
-DRLB TCP load balancer, 11/21/2026
+DRLB TCP load balancer, 11/28/2026 (planned, after a week of testing
+on the OSA and OCA replication tunnel)
 
 Changes since 2.2.0
 -------------------

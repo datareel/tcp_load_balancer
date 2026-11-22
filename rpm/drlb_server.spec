@@ -147,7 +147,7 @@ rm -rf /var/lib/rpm-state/drlb
 exit 0
 
 %changelog
-* Sat Nov 21 2026 Datareel <datareel.com>
+* Sat Nov 28 2026 Datareel <datareel.com>
 - Version 2.2.1
 - MUX: a tunnel closed by the keepalive timeout logs "(network or peer
   down)" and the socket's TCP state (retransmits, rto, unacked, last
